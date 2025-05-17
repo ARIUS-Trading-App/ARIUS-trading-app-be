@@ -1,15 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.db.session import engine, Base
+from app.models import user
 
-app = FastAPI()
+Base.metadata.create_all(bind=engine)
 
-# Define the list of allowed origins for CORS
+app = FastAPI(title="Trading LLM App")
+
 origins = [
     "http://localhost:3000",
-    # Add more origins as needed
 ]
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,           # Allow requests from these origins
@@ -20,4 +21,4 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Hello, FastAPI with CORS!"}
+    return {"message": "Welcome to the Trading LLM App!"}
