@@ -1,2 +1,9 @@
 uvicorn
 fastapi
+ollama
+sqlalchemy
+pydantic-settings
+pydantic[email]
+passlib[bcrypt]
+python-dotenv
+alembic
