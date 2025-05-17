@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr Field
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 from app.models.user import TradingExperienceLevel, RiskAppetite, InvestmentGoals
