@@ -19,12 +19,11 @@ class UserBase(BaseModel):
     timezone: Optional[str] = "UTC"
     
 class UserCreate(UserBase):
-    username: str = Field(..., min_length, max_length=50)
+    username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    password: str = Field(..., min_length=8)
     
 class UserUpdate(UserBase):
-    password: Optional[str] = Field(None, min_length=8)
+    pass
     
 class UserInDBBase(UserBase):
     id: int

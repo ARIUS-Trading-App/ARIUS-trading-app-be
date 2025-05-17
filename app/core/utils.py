@@ -11,8 +11,10 @@ EMAIL_SENDER    = settings.EMAIL_SENDER
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM       = "HS256"
 
-
 def create_magic_token(email: str) -> str:
+    """
+    Create a JWT token for the magic link.
+    """
     payload = {
         "sub": email,
         "exp": datetime.utcnow() + timedelta(minutes=15)
@@ -20,6 +22,9 @@ def create_magic_token(email: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def send_email_link(recipient: str, token: str):
+    """
+    Send a magic link to the user's email for login.
+    """
     login_url = f"http://localhost:8000/auth/verify-token?token={token}"
     message = Mail(
         from_email=EMAIL_SENDER,
