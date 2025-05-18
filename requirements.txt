@@ -7,3 +7,6 @@ pydantic[email]
 passlib[bcrypt]
 python-dotenv
 alembic
+authlib
+python-jose[cryptography]
+sendgrid
