@@ -13,6 +13,17 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = os.getenv("SENDGRID_API_KEY", "your-sendgrid-api-key")
     EMAIL_SENDER: str = os.getenv("EMAIL_SENDER", "no-reply@yourdomain.com")
     
+    OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
+    SMALL_LLM_MODEL: str = os.getenv("SMALL_LLM_MODEL", "llama3.2:3b")
+    
+    TAVILY_API_KEY: str = os.getenv(TAVILY_API_KEY, "")
+    ALPHA_VANTAGE_API_KEY: str = os.getenv(ALPHA_VANTAGE_API_KEY, "")
+    PINECONE_API_KEY: str = os.getenv(PINECONE_API_KEY, "")
+    PINECONE_ENVIRONMENT: str = os.getenv(PINECONE_ENVIRONMENT, "")
+    PINECONE_INDEX_NAME: str = os.getenv(PINECONE_INDEX_NAME, "trading-app-rag")
+    EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
