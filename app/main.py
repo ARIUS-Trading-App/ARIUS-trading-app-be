@@ -9,6 +9,8 @@ from app.routes import auth_router
 from app.routes import user_router
 from app.routes import portfolio_router
 from app.routes.feed_router import router as feed_router
+from app.routes.prediction_router import router as prediction_router
+
 
 
 Base.metadata.create_all(bind=engine)
@@ -38,6 +40,9 @@ app.include_router(portfolio_router.router)
 
 # Include feed router
 app.include_router(feed_router)
+
+# Include prediction router
+app.include_router(prediction_router)
 
 @app.get("/")
 async def root():

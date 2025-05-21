@@ -11,3 +11,5 @@ authlib
 python-jose[cryptography]
 sendgrid
 openai
+pandas
+prophet

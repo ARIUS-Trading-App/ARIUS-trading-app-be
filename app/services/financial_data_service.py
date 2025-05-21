@@ -44,3 +44,12 @@ class FinancialDataService:
         )
         return news_context if news_context else "No specific news found via web search."
 
+    async def get_daily_series(self, symbol: str, outputsize: str = "compact"):
+        """
+        Return OHLC data for a given symbol.
+        keys: 'Time Series (Daily)' → {date: { '1. open':..., '4. close':... }}
+        """
+        data, _ = await self._run_sync(
+            self.ts.get_daily, symbol=symbol, outputsize=outputsize
+        )
+        return data.get("Time Series (Daily)", {})
