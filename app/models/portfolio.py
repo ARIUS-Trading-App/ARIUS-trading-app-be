@@ -3,6 +3,11 @@ from sqlalchemy.orm import relationship
 from app.db.session import Base
 from sqlalchemy.sql import func
 
+
+from app.models.transaction import Transaction
+#!
+transactions = relationship("Transaction", back_populates="portfolio")
+
 class Portfolio(Base):
     __tablename__ = "portfolios"
     id          = Column(Integer, primary_key=True, index=True)

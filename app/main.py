@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine, Base
 from app.models import user
+from app.models import portfolio
+from app.models import transaction
 
 from app.routes import auth_router
 from app.routes import user_router

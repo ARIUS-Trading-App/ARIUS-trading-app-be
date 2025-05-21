@@ -9,6 +9,9 @@ from app.schemas.portfolio import PortfolioCreate, Portfolio, PositionCreate, Po
 
 from app.services.portfolio_service import compute_portfolio_value
 
+from app.crud.transaction import create_transaction, get_transactions
+from app.schemas.transaction import Transaction, TransactionCreate
+from app.services.portfolio_pnl_service import compute_pnl
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
@@ -103,3 +106,112 @@ async def portfolio_insights(
     insight = await llm_service.generate_response(prompt)
 
     return {"portfolio_id": pf_id, "insight": insight}
+
+
+@router.post(
+    "/{pf_id}/transactions",
+    response_model=Transaction,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a new buy/sell transaction"
+)
+def add_transaction(
+    pf_id: int,
+    tx_in: TransactionCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Record a new transaction (buy/sell) for a portfolio.
+    """
+    p = crud_pf.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(404, "Portfolio not found")
+    return crud_tx.create_transaction(db, pf_id, tx_in)
+
+
+@router.get(
+    "/{pf_id}/transactions",
+    response_model=List[Transaction],
+    summary="List transactions with pagination & date filtering"
+)
+def list_transactions(
+    pf_id: int = Path(..., gt=0),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, gt=0, le=200),
+    start: Optional[date] = Query(None, description="YYYY-MM-DD"),
+    end:   Optional[date] = Query(None, description="YYYY-MM-DD"),
+    db:    Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    List transactions for a portfolio with optional pagination and date filtering.
+    """
+    p = crud_pf.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return crud_tx.get_transactions(
+        db, pf_id, skip=skip, limit=limit,
+        start=str(start) if start else None,
+        end=str(end) if end else None
+    )
+
+@router.get("/{pf_id}/pnl")
+async def get_portfolio_pnl(
+    pf_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Compute the PnL of a portfolio.
+    """
+    p = crud.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(404, "Portfolio not found")
+    return await compute_pnl(db, pf_id)
+
+@router.put(
+    "/{pf_id}/transactions/{tx_id}",
+    response_model=Transaction,
+    summary="Update an existing transaction"
+)
+def update_transaction(
+    pf_id: int,
+    tx_id: int,
+    tx_in: TransactionUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Update an existing transaction record.
+    """
+    p = crud_pf.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(404, "Portfolio not found")
+    tx = crud_tx.update_transaction(db, tx_id, tx_in)
+    if not tx:
+        raise HTTPException(404, "Transaction not found")
+    return tx
+
+@router.delete(
+    "/{pf_id}/transactions/{tx_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a transaction record"
+)
+def delete_transaction(
+    pf_id: int,
+    tx_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Delete a transaction record.
+    """
+    p = crud_pf.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(404, "Portfolio not found")
+    success = crud_tx.delete_transaction(db, tx_id)
+    if not success:
+        raise HTTPException(404, "Transaction not found")
+    # Deleting the record simply removes it; your P&L & holdings
+    # will be recalculated on next request from remaining transactions.
+    return
