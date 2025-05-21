@@ -14,7 +14,7 @@ class FinancialDataService:
         self.fd = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
         self.cc = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
 
-    async def _run_sync(self, func, *args, *kwargs):
+    async def _run_sync(self, func, *args, **kwargs):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
     
@@ -36,6 +36,11 @@ class FinancialDataService:
         
     async def get_latest_new_for_stock(self, symbol: str, limit: int = 5):
         news_query = f"latest financial news for {symbol} stock" # update this to be better
-        news_context = await web_search_services.get_search_context(news_query, max_results = limit, ["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"])
+        #! there was an error : news_context = await web_search_services.get_search_context(news_query, max_results = limit, ["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"])
+        news_context = await web_search_services.get_search_context(
+            news_query,
+            max_results=limit,
+            allowed_domains=["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"]
+        )
         return news_context if news_context else "No specific news found via web search."
 
