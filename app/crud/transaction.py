@@ -8,6 +8,7 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate
 def create_transaction(
     db: Session, portfolio_id: int, tx_in: TransactionCreate
 ) -> TxModel:
+    """Create a new transaction record."""
     tx = TxModel(portfolio_id=portfolio_id, **tx_in.dict())
     db.add(tx); db.commit(); db.refresh(tx)
     return tx
@@ -17,6 +18,7 @@ def get_transactions(
     skip: int = 0, limit: int = 50,
     start: Optional[str] = None, end: Optional[str] = None
 ) -> List[TxModel]:
+    """Retrieve transactions for a portfolio with optional pagination and date filtering."""
     q = db.query(TxModel).filter(TxModel.portfolio_id == portfolio_id)
     if start:
         q = q.filter(TxModel.timestamp >= start)
@@ -27,6 +29,7 @@ def get_transactions(
 def update_transaction(
     db: Session, tx_id: int, tx_in: TransactionUpdate
 ) -> Optional[TxModel]:
+    """Update an existing transaction record."""
     tx = db.query(TxModel).filter(TxModel.id == tx_id).first()
     if not tx:
         return None
@@ -36,6 +39,7 @@ def update_transaction(
     return tx
 
 def delete_transaction(db: Session, tx_id: int) -> bool:
+    """Delete a transaction record."""
     tx = db.query(TxModel).filter(TxModel.id == tx_id).first()
     if not tx:
         return False
