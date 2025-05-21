@@ -1,9 +1,10 @@
 import time
 import traceback 
-from pinecone import Pinecone, Index, PodSpec, IndexList , ServerlessSpec
+from pinecone import Pinecone, Index, IndexList , ServerlessSpec
 from app.core.config import settings 
 from app.services.embedding_service import embedding_service 
 from typing import List, Dict, Optional, Tuple
+import asyncio
 
 class VectorDBService:
     def __init__(self):
@@ -85,38 +86,50 @@ class VectorDBService:
     
     async def upsert_documents(self, documents: List[Tuple[str, List[float], Dict]]):
         if not self.index:
-            print("Pinecone index not initialized.")
+            print("Pinecone index not initialized for upsert.")
             return None
         try:
-            response = self.index.upsert(vectors=documents)
+            # Upsert is synchronous in the current pinecone-client
+            # For async FastAPI, run in thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: self.index.upsert(vectors=documents))
             return response
         except Exception as e:
             print(f"Error upserting documents to Pinecone: {e}")
             return None
         
-    
-    async def query_documents(self, query_vector: List[float], top_k: int = 5, namespace: Optional[str] = None, filter_dict: Optional[str] = None) -> List[Dict]:
+    async def query_documents(self, query_vector: List[float], top_k: int = 5, namespace: Optional[str] = None, filter_dict: Optional[Dict] = None) -> List[Dict]: # Corrected filter_dict type
         if not self.index:
-            print("Pinecone index not initialized.")
+            print("Pinecone index not initialized for query.")
             return []
         try:
-            query_response = self.index.query(
-                vector=query_vector,
-                top_k = top_k,
-                include_metadata=True,
-                namespace=namespace,
-                filter=filter_dict
+            # Query is synchronous
+            loop = asyncio.get_event_loop()
+            query_response = await loop.run_in_executor(
+                None, 
+                lambda: self.index.query(
+                    vector=query_vector,
+                    top_k = top_k,
+                    include_metadata=True,
+                    namespace=namespace,
+                    filter=filter_dict
+                )
             )
             return query_response.get('matches', [])
         except Exception as e:
             print(f"Error querying documents from Pinecone: {e}")
             return []
         
-    async def get_pinecone_context(self, query_text: str, top_k: int = 5, **kwargs) -> str:
-        query_embedding = embedding_service.generate_embeddings(query_text)
-        if query_embedding is None:
+    async def get_pinecone_context(self, query_text: str, top_k: int = 3, **kwargs) -> str: # Changed top_k default
+        query_embedding_array = embedding_service.generate_embeddings(query_text) # Returns numpy array
+        if query_embedding_array is None:
             return "Could not generate query embedding for Pinecone."
-        matches = await self.query_documents(query_vector = query_embedding.tolist(), top_k=top_k, **kwargs)
+        
+        # If query_text was a single string, embedding_service returns a single embedding array
+        # If it was a list, it returns a list of arrays. Assuming single query text here.
+        query_embedding_list = query_embedding_array.tolist()
+        
+        matches = await self.query_documents(query_vector = query_embedding_list, top_k=top_k, **kwargs)
             
         context = ""
         if not matches:

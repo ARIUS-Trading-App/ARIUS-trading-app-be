@@ -1,4 +1,10 @@
-from ollama import Client, ChatResponse
+# app/services/llm_provider_service.py
+from ollama import Client
+# It seems `ollama.ChatResponse` is directly available in newer versions,
+# or `ollama._types.ChatResponse` is the canonical path.
+# Let's stick to the direct import if it works, but be mindful.
+from ollama import ChatResponse as OllamaChatResponseType
+from ollama import Message as OllamaMessageType # Import Message type too
 from typing import List, Dict, Union
 from app.core.config import settings
 
@@ -6,34 +12,48 @@ class LLMProviderService:
     def __init__(self):
         self.client = Client(host=settings.OLLAMA_HOST)
         self.model_name = settings.LLM_MODEL
-        # self.small_model_name = settings.SMALL_LLM_MODEL
+        print(f"LLMProviderService initialized with model: {self.model_name} on host: {settings.OLLAMA_HOST}")
         
-    async def chat(self, messages: List[Dict[str, str]]) -> Union[ChatResponse, Dict]:
+    async def chat(self, messages: List[Dict[str, str]]) -> Union[OllamaChatResponseType, Dict]:
         try:
             response = self.client.chat(
-                model = self.model_name,
-                messages = messages
+                model=self.model_name,
+                messages=messages
             )
             return response
-        except Exception as E:
-            print(f"Error communicating with LLM: {e}")
-            return {"error": str(e), "message": {"role": "assistant", "content": "Sorry, I couldn't process that."}}
-        
-        
+        except Exception as e: 
+            print(f"LLMService.chat: Error communicating with LLM: {e}")
+            return {"error": str(e), "llm_message_content": "Sorry, an LLM communication error occurred."}
+            
     async def generate_response(self, prompt: str, history: List[Dict[str, str]] = None) -> str:
-        messages = []
+        messages_for_llm = []
         if history:
-            messages.extend(messages)
-        messages.append({"role": user, "content":prompt})
+            messages_for_llm.extend(history) 
+        messages_for_llm.append({"role": "user", "content": prompt})
         
-        response_obj = await self.chat(messages)
+        response_obj = await self.chat(messages_for_llm)
         
-        if isintance(response_obj, Response):
-            return response_obj.message['content']
-        elif isinstance(response_obj, Dict) and "error" in response_obj:
-            return response_obj.message['content']
-        return "Sorry, an unexpected error occurred with the LLM."
+        if isinstance(response_obj, OllamaChatResponseType):
+            # `response_obj.message` is an OllamaMessageType object
+            if hasattr(response_obj, 'message') and isinstance(response_obj.message, OllamaMessageType):
+                # Access the 'content' attribute of the Message object
+                if hasattr(response_obj.message, 'content') and isinstance(response_obj.message.content, str):
+                    return response_obj.message.content # THIS IS THE KEY CHANGE
+                else:
+                    print(f"LLMProviderService.generate_response: Ollama Message object present, but 'content' attribute missing or not a string.")
+                    print(f"Message object details: role='{response_obj.message.role}', content_type='{type(response_obj.message.content)}'")
+                    return "LLM Message object structure error (content)."
+            else:
+                print(f"LLMProviderService.generate_response: OllamaChatResponseType received, but 'message' attribute missing or not an Ollama Message object.")
+                print(f"Malformed OllamaChatResponseType (message attribute): {response_obj}")
+                return "LLM response was received but had an unexpected internal structure (message attribute)."
+        
+        elif isinstance(response_obj, dict) and "error" in response_obj:
+            print(f"LLMProviderService.generate_response: Error received from self.chat(): {response_obj.get('error')}")
+            return response_obj.get("llm_message_content", "An unspecified error occurred during LLM communication.")
+        
+        print(f"LLMProviderService.generate_response: Unexpected type received from self.chat(). Type: {type(response_obj)}")
+        print(f"Unexpected response_obj content: {response_obj}")
+        return "Sorry, an unexpected issue occurred while processing the LLM response."
     
 llm_service = LLMProviderService()
-
-# add using small_llm_model possibility
