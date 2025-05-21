@@ -13,3 +13,5 @@ sendgrid
 openai
 pandas
 prophet
+pytest
+pytest-regressions
