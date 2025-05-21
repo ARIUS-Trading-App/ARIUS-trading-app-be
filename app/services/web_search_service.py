@@ -1,6 +1,6 @@
 from tavily import TavilyClient
 from app.core.config import settings
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional 
 
 class WebSearchService:
     def __init__(self):

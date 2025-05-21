@@ -1,4 +1,4 @@
-from ollama import Client, Response
+from ollama import Client, ChatResponse
 from typing import List, Dict, Union
 from app.core.config import settings
 
@@ -6,9 +6,9 @@ class LLMProviderService:
     def __init__(self):
         self.client = Client(host=settings.OLLAMA_HOST)
         self.model_name = settings.LLM_MODEL
-        self.small_model_name = settings.SMALL_LLM_MODEL
+        # self.small_model_name = settings.SMALL_LLM_MODEL
         
-    async def chat(self, messages: List[Dict[str, str]]) -> Union[Response, Dict]:
+    async def chat(self, messages: List[Dict[str, str]]) -> Union[ChatResponse, Dict]:
         try:
             response = self.client.chat(
                 model = self.model_name,

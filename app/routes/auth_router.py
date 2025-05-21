@@ -58,7 +58,7 @@ async def verify_token(
             path="/",
             httponly=True,
             samesite="lax",
-        )
+        ) 
         return response
 
     except JWTError:

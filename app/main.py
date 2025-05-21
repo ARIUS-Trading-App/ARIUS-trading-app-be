@@ -5,6 +5,7 @@ from app.models import user
 
 from app.routes import auth_router
 from app.routes import user_router
+from app.routes import chat_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,6 +28,7 @@ app.include_router(auth_router.router)
 
 # Include user router
 app.include_router(user_router.router)
+app.include_router(chat_router.router)
 
 @app.get("/")
 async def root():
