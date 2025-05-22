@@ -9,6 +9,7 @@ from app.crud.feed import (
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.services.feed_service import FeedFetcher
+import asyncio
 
 router = APIRouter(prefix="/feeds", tags=["Feed"])
 
