@@ -23,7 +23,7 @@ class LLMProviderService:
     async def generate_response(self, prompt: str, history: List[Dict[str, str]] = None) -> str:
         messages = []
         if history:
-            messages.extend(messages)
+            messages.extend(history)
         messages.append({"role": "user", "content":prompt})
         
         response_obj = await self.chat(messages)
