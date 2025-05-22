@@ -15,7 +15,7 @@ class LLMProviderService:
                 messages = messages
             )
             return response
-        except Exception as E:
+        except Exception as e:
             print(f"Error communicating with LLM: {e}")
             return {"error": str(e), "message": {"role": "assistant", "content": "Sorry, I couldn't process that."}}
         
@@ -24,11 +24,11 @@ class LLMProviderService:
         messages = []
         if history:
             messages.extend(messages)
-        messages.append({"role": user, "content":prompt})
+        messages.append({"role": "user", "content":prompt})
         
         response_obj = await self.chat(messages)
         
-        if isintance(response_obj, Response):
+        if isinstance(response_obj, Response):
             return response_obj.message['content']
         elif isinstance(response_obj, Dict) and "error" in response_obj:
             return response_obj.message['content']

@@ -2,13 +2,13 @@ import asyncio
 from typing import List
 from datetime import datetime, timedelta
 
-from app.services.web_search_service import web_search_service
+from app.services.web_search_services import web_search_service
 from app.services.llm_provider_service import llm_service
 from app.crud.feed import create_feed_item, update_feed_summary
 from sqlalchemy.orm import Session
 
 class FeedFetcher:
-    def __init__(self, db: Session, user_id: int):
+    def __init__(self, db: Session, user_id : int):
         self.db = db
         self.user_id = user_id
 
