@@ -1,19 +1,17 @@
-# app/services/rag_service.py
 from app.services.llm_provider_service import llm_service
-from app.services.web_search_service import web_search_service # Ensure this is used
+from app.services.web_search_service import web_search_service 
 from app.services.financial_data_service import financial_data_service
 from app.services.vector_db_service import vector_db_service
+from app.core.config import settings
 from app.models.user import User as UserModel
 from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime
-# ollama.Response for type hinting if using it directly
 from ollama import ChatResponse as OllamaChatResponseType
 from ollama import Message as OllamaMessageType
 
 class RAGService:
     def _summarize_user_profile(self, user: UserModel) -> str:
-        # ... (your existing code for this method) ...
         summary = f"User: {user.username} (Email: {user.email})\n"
         if user.trading_experience:
             summary += f"Trading Experience: {user.trading_experience.value}\n"
@@ -28,7 +26,6 @@ class RAGService:
         return summary.strip()
 
     async def _understand_query_with_llm(self, user_query: str, current_user: UserModel) -> Dict[str, Any]:
-        # ... (your existing code, ensure llm_service is used correctly) ...
         user_profile_summary = self._summarize_user_profile(current_user)
         
         understanding_prompt = f"""
@@ -62,7 +59,9 @@ class RAGService:
 
         If the query is ambiguous or requires clarification, set "clarification_needed" to true and formulate a "clarification_question".
 
-        Output your analysis as a JSON object only, with no other text before or after.
+        Output your analysis as a JSON object ONLY, with NO other text before or after. If you sense more intents, you don't limit to only one.
+        For example, if a user asks for the current price of a stock, and then asks for an investment sugestion for a crypto currency, the json should contain both(all) intents.
+        This goes for all entities, as well. Include all stocks, cryptos, timeframes from the user query, do not limit to just one per entity.
         Example JSON output format:
         {{
             "intent": "get_stock_news",
@@ -75,18 +74,17 @@ class RAGService:
             "clarification_needed": false,
             "clarification_question": null
         }}
+        Respect the structure and fields of the given json example!
         If no specific symbols are found but the intent implies them (e.g., "tell me about tech stocks"), leave symbols list empty.
         """
         
-        # Corrected: Use llm_service.generate_response which returns a string
-        response_str_from_llm = await llm_service.generate_response(prompt=understanding_prompt) 
+        response_str_from_llm = await llm_service.generate_response(prompt=understanding_prompt, is_json = True) 
         
         print(f"RAGService._understand_query_with_llm: Raw string from LLM for JSON parsing: '''{response_str_from_llm}'''")
 
         try:
             clean_response_str = response_str_from_llm.strip()
             if clean_response_str.startswith("```json"):
-                # More robustly remove potential leading/trailing backticks and "json" keyword
                 clean_response_str = clean_response_str.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             
             parsed_understanding = json.loads(clean_response_str)
@@ -98,7 +96,6 @@ class RAGService:
         except (json.JSONDecodeError, ValueError) as e:
             print(f"RAGService._understand_query_with_llm: Error parsing LLM string as JSON: {e}")
             print(f"String attempted for parsing: '''{clean_response_str if 'clean_response_str' in locals() else response_str_from_llm}'''")
-            # Fallback if JSON parsing fails
             return {
                 "intent": "general_chat", 
                 "entities": {"stock_symbols": [], "crypto_symbols": [], "timeframe": None, "topics": [user_query]},
@@ -119,21 +116,20 @@ class RAGService:
         stock_symbols = entities.get("stock_symbols", [])
         crypto_symbols = entities.get("crypto_symbols", [])
         timeframe = entities.get("timeframe")
-        topics = entities.get("topics", []) # Corrected: entities.get
+        topics = entities.get("topics", []) 
         
         context_parts = []
         user_profile_summary = self._summarize_user_profile(current_user)
         context_parts.append(f"User Profile Context:\n{user_profile_summary}")
         
-        web_search_performed_for_intent = False # NEW flag
+        web_search_performed_for_intent = False 
 
-        if intent == "get_stock_price" and stock_symbols:
+        if "get_stock_price" in intent and stock_symbols:
             for symbol in stock_symbols:
                 quote = await financial_data_service.get_stock_quote(symbol)
-                if quote and 'Global Quote' in quote and quote['Global Quote'].get('05. price'):
-                    price = quote['Global Quote']['05. price']
+                if quote and quote.get('05. price'):
+                    price = quote.get('05. price')
                     context_parts.append(f"Current Price for {symbol}: ${price}")
-            # Supplemental web search for analysis/news
             news_query = f"latest news or analysis for {', '.join(stock_symbols)}"
             supplemental_news = await web_search_service.get_search_context(news_query, max_results=1)
             if supplemental_news and "No relevant information" not in supplemental_news:
@@ -141,21 +137,17 @@ class RAGService:
             web_search_performed_for_intent = True
 
 
-        elif intent == "get_crypto_price" and crypto_symbols: # Ensure this block is complete
+        if "get_crypto_price" in intent and crypto_symbols: 
             for symbol in crypto_symbols:
-                # Alpha Vantage crypto daily might not be "current price". Web search might be better.
-                quote_data = await financial_data_service.get_crypto_quote(symbol)
-                # The key from AV for daily close can be specific, e.g., '4a. close (USD)'
-                # Let's make this more robust or rely more on web search for current crypto price
+                crypto_price = await financial_data_service.get_crypto_quote(symbol)
+                print("!!!!!!!")
+                print(crypto_price)
                 price_found_api = False
-                if quote_data:
-                    # Try to find a close price key, it might vary
-                    for key in quote_data:
-                        if 'close' in key.lower() and (settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT or "USD").lower() in key.lower():
-                            price = quote_data[key]
-                            context_parts.append(f"Latest Daily Close Price for {symbol.upper()} (from API): ${price}")
-                            price_found_api = True
-                            break
+                if crypto_price:
+                    print("???")
+                    context_parts.append(f"Latest Daily Close Price for {symbol.upper()} (from API): ${crypto_price}")
+                    price_found_api = True
+                    break
                 if not price_found_api:
                     crypto_price_search_result = await web_search_service.get_search_context(f"current price of {symbol.upper()} crypto", max_results=1)
                     if crypto_price_search_result and "No relevant information" not in crypto_price_search_result:
@@ -166,10 +158,10 @@ class RAGService:
                 context_parts.append(f"Supplemental Web Info for {', '.join(crypto_symbols)} crypto:\n{supplemental_news}")
             web_search_performed_for_intent = True
 
-        elif intent == "get_stock_news" and stock_symbols:
+        if "get_stock_news" in intent and stock_symbols:
             news_query = f"latest financial news for {', '.join(stock_symbols)}"
             if timeframe: news_query += f" covering timeframe {timeframe}"
-            stock_news_results = await web_search_service.get_search_context(news_query, max_results=3, include_domains=["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com", "finance.yahoo.com"])
+            stock_news_results = await web_search_service.get_search_context(news_query, max_results=5, include_domains=["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com", "finance.yahoo.com"])
             if stock_news_results and "No relevant information" not in stock_news_results:
                 context_parts.append(f"Stock News for {', '.join(stock_symbols)}:\n{stock_news_results}")
             web_search_performed_for_intent = True
@@ -178,7 +170,7 @@ class RAGService:
                 if overview and overview.get('Description'):
                     context_parts.append(f"Overview for {symbol}: {overview.get('Description', '')[:200]}...")
 
-        elif intent == "get_company_info" and stock_symbols:
+        if "get_company_info" in intent and stock_symbols:
             for symbol in stock_symbols:
                 overview = await financial_data_service.get_company_overview(symbol)
                 if overview and overview.get('Description'):
@@ -190,17 +182,16 @@ class RAGService:
                 context_parts.append(f"Recent Developments (Web Search) for {', '.join(stock_symbols)}:\n{supplemental_news}")
             web_search_performed_for_intent = True
 
-        elif intent == "investment_suggestion" and (stock_symbols or crypto_symbols or topics):
+        if "investment_suggestion" in intent and (stock_symbols or crypto_symbols or topics):
             assets_involved = stock_symbols + crypto_symbols
             context_parts.append("Note to LLM: User is seeking an investment suggestion.")
-            for asset_symbol in assets_involved: # Ensure you handle stock vs crypto here if services differ
-                if asset_symbol in stock_symbols: # Crude check, improve if symbols can overlap
+            for asset_symbol in assets_involved: 
+                if asset_symbol in stock_symbols: 
                     overview = await financial_data_service.get_company_overview(asset_symbol) 
                     if overview and overview.get('Description'): context_parts.append(f"Overview {asset_symbol}: {overview.get('Description', '')[:200]}...")
                     quote_data = await financial_data_service.get_stock_quote(asset_symbol) 
                     if quote_data and 'Global Quote' in quote_data and quote_data['Global Quote'].get('05. price'):
                         context_parts.append(f"Price {asset_symbol}: ${quote_data['Global Quote']['05. price']}")
-                # Add similar logic for crypto if needed, using get_crypto_quote and web search for price
 
             news_query = f"investment analysis, risks, and outlook for {', '.join(assets_involved + topics)}"
             if timeframe: news_query += f" (considering timeframe: {timeframe})"
@@ -209,7 +200,7 @@ class RAGService:
                 context_parts.append(f"Web Search Context for Suggestion:\n{web_news_results}")
             web_search_performed_for_intent = True
         
-        if not web_search_performed_for_intent and (intent == "general_chat" or (not context_parts or len(context_parts) <= 1)): # Check if context_parts is empty beyond user profile
+        if not web_search_performed_for_intent and (intent == "general_chat" or (not context_parts or len(context_parts) <= 1)): 
             general_search_query = user_query
             if topics: general_search_query = f"{user_query} related to {', '.join(topics)}"
             
@@ -220,7 +211,7 @@ class RAGService:
 
         pinecone_query_text = user_query
         if topics: pinecone_query_text += " " + " ".join(topics)
-        if stock_symbols: pinecone_query_text += " " + " ".join(stock_symbols) # Also add crypto_symbols if relevant
+        if stock_symbols: pinecone_query_text += " " + " ".join(stock_symbols) 
         if crypto_symbols: pinecone_query_text += " " + " ".join(crypto_symbols)
         
         if "strategy" in user_query.lower() or "analysis report" in user_query.lower() or "deep dive" in user_query.lower() or intent in ["investment_suggestion", "market_outlook", "compare_assets"]:
@@ -229,10 +220,9 @@ class RAGService:
             if pinecone_context_results and "No relevant documents found" not in pinecone_context_results:
                 context_parts.append(f"Information from Knowledge Base (Vector DB):\n{pinecone_context_results}")
         
-        # --- End Context Gathering ---
 
         final_context = "\n\n---\n\n".join(filter(None, context_parts))
-        if not final_context.replace(f"User Profile Context:\n{user_profile_summary}", "").strip(): # Check if only user profile is there
+        if not final_context.replace(f"User Profile Context:\n{user_profile_summary}", "").strip(): 
              final_context = "No specific external context was retrieved for this query. Please answer based on general knowledge or the user's profile if relevant."
         
         system_prompt_for_answer = f"""You are an expert financial assistant chatbot.
@@ -247,6 +237,9 @@ class RAGService:
         Carefully consider the user's profile when formulating any advice.
         If providing investment opinions, ALWAYS include a disclaimer: "This is not financial advice. Consult a qualified professional."
         If context is insufficient or empty (beyond user profile), state that you couldn't find specific information but can try to answer generally, or ask for clarification. Do not make up information.
+        Do not say the information is not up to date because of your knowedge cutoff, because what I feed you is real time information. Do not include things like "provided by the API". 
+        Make it seem to the user like you know the answer without any backend help. 
+        Try to give somewhat clear answers, do not yap or give generic responses.
         Be clear, concise, and helpful.
         """
 
@@ -254,7 +247,6 @@ class RAGService:
         if chat_history:
             final_answer_messages.extend(chat_history)
         
-        # Ensure the prompt for the final LLM call isn't overly repetitive if context is minimal
         prompt_for_final_llm = f"User Query: {user_query}\n\nRelevant Context (if any):\n{final_context}\n\nPlease provide your answer."
         final_answer_messages.append({"role": "user", "content": prompt_for_final_llm})
         

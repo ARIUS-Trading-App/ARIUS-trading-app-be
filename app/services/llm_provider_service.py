@@ -1,11 +1,7 @@
-# app/services/llm_provider_service.py
 from ollama import Client
-# It seems `ollama.ChatResponse` is directly available in newer versions,
-# or `ollama._types.ChatResponse` is the canonical path.
-# Let's stick to the direct import if it works, but be mindful.
 from ollama import ChatResponse as OllamaChatResponseType
-from ollama import Message as OllamaMessageType # Import Message type too
-from typing import List, Dict, Union
+from ollama import Message as OllamaMessageType 
+from typing import List, Dict, Union, Optional
 from app.core.config import settings
 
 class LLMProviderService:
@@ -14,31 +10,34 @@ class LLMProviderService:
         self.model_name = settings.LLM_MODEL
         print(f"LLMProviderService initialized with model: {self.model_name} on host: {settings.OLLAMA_HOST}")
         
-    async def chat(self, messages: List[Dict[str, str]]) -> Union[OllamaChatResponseType, Dict]:
+    async def chat(self, messages: List[Dict[str, str]], format_type: Optional[str] = None) -> Union[OllamaChatResponseType, Dict]:
         try:
-            response = self.client.chat(
-                model=self.model_name,
-                messages=messages
-            )
+            chat_kwargs = {
+                "model": self.model_name,
+                "messages": messages
+            }
+            if format_type:
+                chat_kwargs["format"] = format_type
+
+            response = self.client.chat(**chat_kwargs)
             return response
         except Exception as e: 
             print(f"LLMService.chat: Error communicating with LLM: {e}")
             return {"error": str(e), "llm_message_content": "Sorry, an LLM communication error occurred."}
             
-    async def generate_response(self, prompt: str, history: List[Dict[str, str]] = None) -> str:
+    async def generate_response(self, prompt: str, history: List[Dict[str, str]] = None, is_json: bool = False) -> str:
         messages_for_llm = []
         if history:
             messages_for_llm.extend(history) 
         messages_for_llm.append({"role": "user", "content": prompt})
         
-        response_obj = await self.chat(messages_for_llm)
+        format_to_use = "json" if is_json else None
+        response_obj = await self.chat(messages_for_llm, format_type=format_to_use)
         
         if isinstance(response_obj, OllamaChatResponseType):
-            # `response_obj.message` is an OllamaMessageType object
             if hasattr(response_obj, 'message') and isinstance(response_obj.message, OllamaMessageType):
-                # Access the 'content' attribute of the Message object
                 if hasattr(response_obj.message, 'content') and isinstance(response_obj.message.content, str):
-                    return response_obj.message.content # THIS IS THE KEY CHANGE
+                    return response_obj.message.content
                 else:
                     print(f"LLMProviderService.generate_response: Ollama Message object present, but 'content' attribute missing or not a string.")
                     print(f"Message object details: role='{response_obj.message.role}', content_type='{type(response_obj.message.content)}'")

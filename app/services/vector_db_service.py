@@ -89,8 +89,6 @@ class VectorDBService:
             print("Pinecone index not initialized for upsert.")
             return None
         try:
-            # Upsert is synchronous in the current pinecone-client
-            # For async FastAPI, run in thread pool
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(None, lambda: self.index.upsert(vectors=documents))
             return response
@@ -103,7 +101,6 @@ class VectorDBService:
             print("Pinecone index not initialized for query.")
             return []
         try:
-            # Query is synchronous
             loop = asyncio.get_event_loop()
             query_response = await loop.run_in_executor(
                 None, 
@@ -120,13 +117,11 @@ class VectorDBService:
             print(f"Error querying documents from Pinecone: {e}")
             return []
         
-    async def get_pinecone_context(self, query_text: str, top_k: int = 3, **kwargs) -> str: # Changed top_k default
-        query_embedding_array = embedding_service.generate_embeddings(query_text) # Returns numpy array
+    async def get_pinecone_context(self, query_text: str, top_k: int = 3, **kwargs) -> str: 
+        query_embedding_array = embedding_service.generate_embeddings(query_text) 
         if query_embedding_array is None:
             return "Could not generate query embedding for Pinecone."
         
-        # If query_text was a single string, embedding_service returns a single embedding array
-        # If it was a list, it returns a list of arrays. Assuming single query text here.
         query_embedding_list = query_embedding_array.tolist()
         
         matches = await self.query_documents(query_vector = query_embedding_list, top_k=top_k, **kwargs)

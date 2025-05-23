@@ -8,7 +8,7 @@ class WebSearchService:
             raise ValueError("TAVILY_API_KEY not set in environment variables.")
         self.client = TavilyClient(api_key=settings.TAVILY_API_KEY)
 
-    async def search(self, query: str, search_depth: str = "basic", max_results: int = 5, include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> List[Dict]:
+    async def search(self, query: str, search_depth: str = "advanced", max_results: int = 5, include_domains: Optional[List[str]] = None, exclude_domains: Optional[List[str]] = None) -> List[Dict]:
         try:
             response = self.client.search(
                 query=query,
@@ -26,7 +26,7 @@ class WebSearchService:
         results = await self.search(query, **kwargs)
         context = ""
         for i, result in enumerate(results):
-            content_snippet = result.get('content', '')[:max_chars_per_result]
+            content_snippet = result.get('content', '') #[:max_chars_per_result]
             context += f"Source {i+1} (URL: {result.get('url', 'N/A')}):\n{content_snippet}\n\n"
         return context.strip() if context else "No relevant information found from web search."
 
