@@ -1,41 +1,40 @@
 # app/schemas/transaction.py
 
-from pydantic import BaseModel, Field, validator
-from datetime import datetime
-from typing import Optional, List
+from datetime import date as dt_date, datetime
+from typing import Optional
+from decimal import Decimal
+from pydantic import BaseModel, Field, condecimal, conint
+
 from app.models.transaction import TransactionType
-import re
 
 class TransactionBase(BaseModel):
-    symbol: str = Field(..., example="AAPL")
+    symbol: str
     type: TransactionType
-    quantity: float = Field(..., gt=0, example=10)
-    price: float = Field(..., gt=0, example=150.5)
-
-    @validator("symbol")
-    def symbol_format(cls, v):
-        if not re.match(r"^[A-Z]{1,5}$", v):
-            raise ValueError("Invalid ticker format")
-        return v
+    quantity: conint(gt=0)
+    price: condecimal(gt=0)
 
 class TransactionCreate(TransactionBase):
-    pass
+    date: dt_date = Field(default_factory=dt_date.today)
 
 class TransactionUpdate(BaseModel):
-    symbol: Optional[str] = Field(None, example="AAPL")
-    type: Optional[TransactionType]
-    quantity: Optional[float] = Field(None, gt=0)
-    price: Optional[float] = Field(None, gt=0)
+    symbol: Optional[str] = None
+    type: Optional[TransactionType] = None
+    quantity: Optional[conint(gt=0)] = None
+    price: Optional[condecimal(gt=0)] = None
+    date: Optional[dt_date] = None
 
-    @validator("symbol")
-    def symbol_format(cls, v):
-        if v and not re.match(r"^[A-Z]{1,5}$", v):
-            raise ValueError("Invalid ticker format")
-        return v
+    class Config:
+        orm_mode = True
 
 class Transaction(TransactionBase):
     id: int
+    portfolio_id: int
+    date: dt_date
     timestamp: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
+        # <-- this is the new bit:
+        json_encoders = {
+            Decimal: lambda v: float(v)
+        }

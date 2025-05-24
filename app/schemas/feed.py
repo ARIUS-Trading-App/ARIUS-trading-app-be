@@ -1,3 +1,5 @@
+# app/schemas/feed.py
+
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
@@ -8,9 +10,10 @@ class FeedItemBase(BaseModel):
     source: str
     original_id: str
     content: str
-    metadata: dict = {}
+    meta: dict = Field(default_factory=dict)
 
 class FeedItemCreate(FeedItemBase):
+    """Used when creating a new feed item."""
     pass
 
 class FeedItem(FeedItemBase):

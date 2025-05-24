@@ -1,3 +1,5 @@
+# tests/integration/test_portfolio_endpoints.py
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -41,18 +43,15 @@ def auth_client(client):
 def test_portfolio_crud_and_value(client):
     c = auth_client(client)
 
-    # Create portfolio
     resp = c.post("/portfolios/", json={"name": "Integration PF"})
-    assert resp.status_code == 200
+    assert resp.status_code == 201        
     pf = resp.json()
     pf_id = pf["id"]
 
-    # List portfolios
     lst = c.get("/portfolios/")
     assert lst.status_code == 200
     assert any(p["id"] == pf_id for p in lst.json())
 
-    # Value endpoint (no positions yet -> 0)
     val = c.get(f"/portfolios/{pf_id}/value")
     assert val.status_code == 200
     assert val.json()["value"] == 0.0

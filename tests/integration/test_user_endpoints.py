@@ -2,13 +2,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.dependencies import get_current_user
 from app.db.session import Base, get_db
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# --- setup an in-memory DB and override get_db ---
+app.dependency_overrides.pop(get_current_user, None)
+
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
 
@@ -26,6 +31,8 @@ def client():
     return TestClient(app)
 
 def test_full_auth_and_user_flow(client):
+    app.dependency_overrides.pop(get_current_user, None)
+
     # 1) Request magic link
     resp1 = client.post("/auth/request-token", json={"email": "bob@example.com"})
     assert resp1.status_code == 200
@@ -36,8 +43,7 @@ def test_full_auth_and_user_flow(client):
     assert resp2.status_code == 200
     assert "access_token" in resp2.cookies
 
-    # 3) Create a new user
-    #    (use the cookie set by verify-token)
+    # 3) Create a new user (uses the real get_current_user now)
     client.cookies["access_token"] = resp2.cookies["access_token"]
     resp3 = client.post(
         "/users/",

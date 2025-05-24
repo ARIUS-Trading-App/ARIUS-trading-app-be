@@ -2,8 +2,8 @@ import asyncio
 from typing import List
 from datetime import datetime, timedelta
 
-from app.services.web_search_service import web_search_service
-from app.services.llm_provider_service import llm_service
+from app.services.web_search_services import web_search_service
+from .llm_provider_service import llm_service
 from app.crud.feed import create_feed_item, update_feed_summary
 from sqlalchemy.orm import Session
 
@@ -16,11 +16,11 @@ class FeedFetcher:
         # use web_search_service to pull news headlines/text
         results = await web_search_service.search(
             query=query, search_depth="basic", max_results=limit,
-            include_domains=["reuters.com","bloomberg.com"]
+            include_domains=["reuters.com", "bloomberg.com"]
         )
         for res in results:
             item = await self._store_item("news", res)
-            await self._summarize(item.id, res.get("content",""))
+            await self._summarize(item.id, res.get("content", ""))
     
     async def fetch_tweets(self, query: str, limit: int = 10):
         # placeholder: integrate with Twitter API client
@@ -36,10 +36,11 @@ class FeedFetcher:
     async def _store_item(self, typ: str, raw: dict):
         from app.schemas.feed import FeedItemCreate
         dto = FeedItemCreate(
-            type=typ, source=raw.get("source","unknown"),
+            type=typ,
+            source=raw.get("source", "unknown"),
             original_id=raw["original_id"],
             content=raw["content"],
-            metadata=raw.get("metadata",{})
+            meta=raw.get("metadata", {})
         )
         return create_feed_item(self.db, self.user_id, dto)
 

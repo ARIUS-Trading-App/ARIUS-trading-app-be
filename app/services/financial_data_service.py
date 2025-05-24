@@ -1,55 +1,53 @@
-from alpha_vantage.timeseries import TimeSeries
-from alpha_vantage.fundamentaldata import FundamentalData
-from alpha_vantage.cryptocurrencies import CryptoCurrencies
-# add news from alphavantage as well
-from app.core.config import settings
-import web_search_services
+# app/services/financial_data_service.py
+
 import asyncio
+from typing import List, Tuple, Optional
+from app.core.config import settings
+
+try:
+    from alpha_vantage.timeseries import TimeSeries
+except ImportError:
+    TimeSeries = None
 
 class FinancialDataService:
     def __init__(self):
-        if not settings.ALPHA_VANTAGE_API_KEY:
-            raise ValueError("ALPHA_VANTAGE_API_KEY not set in environment variables.")
-        self.ts = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
-        self.fd = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
-        self.cc = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
+        if TimeSeries is None:
+            self.ts = None
+        else:
+            if not settings.ALPHA_VANTAGE_API_KEY:
+                raise ValueError("ALPHA_VANTAGE_API_KEY not set in environment variables.")
+            self.ts = TimeSeries(key=settings.ALPHA_VANTAGE_API_KEY, output_format='json')
 
     async def _run_sync(self, func, *args, **kwargs):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
-    
-    async def get_stock_quote(self, symbol: str):
-        try:
-            data, _ = await self._run_sync(self.ts.get_quote_endpoint, symbol=symbol)
-            return data
-        except Exception as e:
-            print(f"Error fetching company overview for {symbol}: {e}")
-            return None
-        
-    async def get_company_overview(self, symbol: str):
-        try:
-            data, _ = await self._run_async(self.fd.get_company_overview, symbol=symbol)
-            return data
-        except Exception as e:
-            print(f"Error fetching company overview for {symbol}: {e}")
-            return None
-        
-    async def get_latest_new_for_stock(self, symbol: str, limit: int = 5):
-        news_query = f"latest financial news for {symbol} stock" # update this to be better
-        #! there was an error : news_context = await web_search_services.get_search_context(news_query, max_results = limit, ["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"])
-        news_context = await web_search_services.get_search_context(
-            news_query,
-            max_results=limit,
-            allowed_domains=["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"]
-        )
-        return news_context if news_context else "No specific news found via web search."
 
-    async def get_daily_series(self, symbol: str, outputsize: str = "compact"):
+    async def get_stock_quote(self, symbol: str) -> dict:
         """
-        Return OHLC data for a given symbol.
-        keys: 'Time Series (Daily)' → {date: { '1. open':..., '4. close':... }}
+        Fetch latest stock quote for `symbol`. Returns empty dict if unavailable.
         """
-        data, _ = await self._run_sync(
-            self.ts.get_daily, symbol=symbol, outputsize=outputsize
-        )
-        return data.get("Time Series (Daily)", {})
+        if self.ts is None:
+            return {}
+        try:
+            data, _ = await self._run_sync(self.ts.get_quote_endpoint, symbol)
+            return data
+        except Exception as e:
+            print(f"Error fetching stock quote for {symbol}: {e}")
+            return {}
+
+    async def get_daily_series(self, symbol: str, outputsize: str = "compact") -> dict:
+        """
+        Fetch daily OHLC time series for `symbol`.
+        Returns dict of { date: { '1. open':..., '4. close':... } } or empty dict.
+        """
+        if self.ts is None:
+            return {}
+        try:
+            data, _ = await self._run_sync(self.ts.get_daily, symbol=symbol, outputsize=outputsize)
+            return data.get("Time Series (Daily)", {})
+        except Exception as e:
+            print(f"Error fetching daily series for {symbol}: {e}")
+            return {}
+
+# Singleton instance
+financial_data_service = FinancialDataService()

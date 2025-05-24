@@ -25,3 +25,21 @@ class Portfolio(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PositionOut(BaseModel):
+    id: int
+    symbol: str
+    quantity: float
+    avg_price: float
+
+    class Config:
+        orm_mode = True
+
+class PortfolioOut(BaseModel):
+    id:        int
+    name:      str
+    positions: List[PositionOut]
+
+    class Config:
+        orm_mode = True

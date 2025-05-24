@@ -10,6 +10,9 @@ from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.services.feed_service import FeedFetcher
 
+from app.services.web_search_services import web_search_service
+
+
 router = APIRouter(prefix="/feeds", tags=["Feed"])
 
 @router.post(
