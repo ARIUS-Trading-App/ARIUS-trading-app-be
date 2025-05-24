@@ -96,7 +96,7 @@ class VectorDBService:
             print(f"Error upserting documents to Pinecone: {e}")
             return None
         
-    async def query_documents(self, query_vector: List[float], top_k: int = 5, namespace: Optional[str] = None, filter_dict: Optional[Dict] = None) -> List[Dict]: # Corrected filter_dict type
+    async def query_documents(self, query_vector: List[float], top_k: int = 5, namespace: Optional[str] = None, filter_dict: Optional[Dict] = None) -> List[Dict]: 
         if not self.index:
             print("Pinecone index not initialized for query.")
             return []
