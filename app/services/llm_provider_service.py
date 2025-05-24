@@ -27,7 +27,10 @@ class LLMProviderService:
                 chat_kwargs["format"] = format_type
 
             response = self.client.chat(**chat_kwargs)
-            print(f"---response was created with {smaller_model}")
+            if smaller_model:
+                print(f"---response was created with {self.smaller_model_name}")
+            else:
+                print(f"---response was created with {self.model_name}")
             return response
         except Exception as e: 
             print(f"LLMService.chat: Error communicating with LLM: {e}")
