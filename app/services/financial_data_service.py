@@ -23,6 +23,8 @@ class FinancialDataService:
     async def get_stock_quote(self, symbol: str):
         try:
             data, _ = await self._run_sync(self.ts.get_quote_endpoint, symbol=symbol)
+            print("^^^^")
+            print(data)
             return data
         except Exception as e:
             print(f"Error fetching stock quote for {symbol}: {e}") 

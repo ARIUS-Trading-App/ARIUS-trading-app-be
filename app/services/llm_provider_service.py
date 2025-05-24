@@ -8,18 +8,26 @@ class LLMProviderService:
     def __init__(self):
         self.client = Client(host=settings.OLLAMA_HOST)
         self.model_name = settings.LLM_MODEL
-        print(f"LLMProviderService initialized with model: {self.model_name} on host: {settings.OLLAMA_HOST}")
+        self.smaller_model_name = settings.SMALLER_LLM_MODEL
+        print(f"LLMProviderService initialized with model: {self.model_name}, {self.smaller_model_name} on host: {settings.OLLAMA_HOST}")
         
-    async def chat(self, messages: List[Dict[str, str]], format_type: Optional[str] = None) -> Union[OllamaChatResponseType, Dict]:
+    async def chat(self, messages: List[Dict[str, str]], format_type: Optional[str] = None, smaller_model: bool = False) -> Union[OllamaChatResponseType, Dict]:
         try:
-            chat_kwargs = {
-                "model": self.model_name,
-                "messages": messages
-            }
+            if smaller_model:
+                chat_kwargs = {
+                    "model": self.model_name,
+                    "messages": messages
+                }
+            else:
+                chat_kwargs = {
+                    "model": self.smaller_model_name,
+                    "messages": messages
+                }
             if format_type:
                 chat_kwargs["format"] = format_type
 
             response = self.client.chat(**chat_kwargs)
+            print(f"---response was created with {smaller_model}")
             return response
         except Exception as e: 
             print(f"LLMService.chat: Error communicating with LLM: {e}")
@@ -32,7 +40,7 @@ class LLMProviderService:
         messages_for_llm.append({"role": "user", "content": prompt})
         
         format_to_use = "json" if is_json else None
-        response_obj = await self.chat(messages_for_llm, format_type=format_to_use)
+        response_obj = await self.chat(messages_for_llm, format_type=format_to_use, smaller_model = is_json)
         
         if isinstance(response_obj, OllamaChatResponseType):
             if hasattr(response_obj, 'message') and isinstance(response_obj.message, OllamaMessageType):

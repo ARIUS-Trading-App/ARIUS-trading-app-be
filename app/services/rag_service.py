@@ -29,53 +29,68 @@ class RAGService:
         user_profile_summary = self._summarize_user_profile(current_user)
         
         understanding_prompt = f"""
-        You are an expert query analyzer for a financial chatbot.
-        Analyze the following user query in the context of their user profile and determine their intent and key entities.
+        You are an expert query analyzer for a financial chatbot. Your primary goal is to meticulously analyze user queries, identify ALL intents expressed, and extract ALL relevant financial entities.
 
         User Profile:
         {user_profile_summary}
 
         User Query: "{user_query}"
 
-        Possible Intents:
+        **Core Task:**
+        Decompose the user query into one or more distinct intents. For each intent, identify all associated entities. Aggregate all unique intents into a list and all unique entities into their respective lists/fields in the final JSON output.
+
+        **Possible Intents (the "intent" field in the output JSON should be a LIST of these):**
         - "get_stock_price": User wants the current price of one or more stocks.
         - "get_stock_news": User wants recent news about specific stocks or the market.
-        - "get_company_info": User wants general information or overview about a company/stock.
+        - "get_company_info": User wants general information, an overview, or specific stats (like performance, fundamentals) about a company/stock.
         - "get_crypto_price": User wants the current price of one or more cryptocurrencies.
         - "get_crypto_news": User wants recent news about specific cryptocurrencies.
-        - "investment_suggestion": User is asking for advice or opinion on whether to invest, buy, or sell.
+        - "get_crypto_info": User wants general information, an overview, or specific stats (like performance, fundamentals) about a cryptocurrency.
+        - "investment_suggestion": User is asking for advice or opinion on whether to invest, buy, or sell an asset.
         - "portfolio_analysis": User is asking about their portfolio (requires portfolio data - future feature).
         - "market_outlook": User is asking for general market trends or predictions.
         - "compare_assets": User wants to compare two or more assets.
         - "general_chat": User is having a general conversation, not specifically financial.
-        - "clarification_needed": If the query is too vague or ambiguous.
+        - "clarification_needed": If the query is too vague, ambiguous, or essential information is missing.
 
-        Entities to extract:
-        - "stock_symbols": List of stock ticker symbols (e.g., ["AAPL", "MSFT"]). If multiple, list all.
-        - "crypto_symbols": List of cryptocurrency symbols (e.g., ["BTC", "ETH"]).
-        - "timeframe": Any mention of time (e.g., "today", "this week", "last month", "since 2022").
-        - "topics": Other key topics or keywords (e.g., ["AI research", "dividend yield"]).
-        - "sentiment_query": If the user is asking about positive/negative sentiment.
+        **Entities to Extract (ensure all relevant entities from the query are captured):**
+        - "stock_symbols": List of stock ticker symbols (e.g., ["AAPL", "MSFT"]). Extract ALL mentioned. Map company names (e.g., "Apple", "Nvidia") to their likely ticker symbols.
+        - "crypto_symbols": List of cryptocurrency symbols (e.g., ["BTC", "ETH"]). Extract ALL mentioned. Map cryptocurrency names (e.g., "Bitcoin", "Ethereum") to their likely symbols.
+        - "timeframe": Any mention of time (e.g., "today", "this week", "last month", "since 2022"). If multiple distinct timeframes are mentioned that apply globally or to significant parts of the query, try to capture the most encompassing or list them if appropriate for a single string field (e.g., "today and last week"). For now, provide a single string.
+        - "topics": Other key topics, keywords, or specific data points requested (e.g., ["AI research", "dividend yield", "production numbers", "performance", "stats"]). Capture ALL relevant topics as a list.
+        - "sentiment_query": (Boolean) True if the user is asking about positive/negative sentiment or market feeling, false otherwise.
 
-        If the query is ambiguous or requires clarification, set "clarification_needed" to true and formulate a "clarification_question".
+        **Output Instructions:**
+        - Respond ONLY with a single JSON object. Do NOT include any text before or after the JSON.
+        - The "intent" field in the JSON output MUST be a list of strings, even if only one intent is detected.
+        - Ensure ALL stock symbols, crypto symbols, and relevant topics mentioned in the query are included in their respective lists within the "entities" object. Do not limit to just one per entity type.
+        - If no specific symbols are found but an intent implies them (e.g., "tell me about tech stocks news"), leave the relevant symbols list empty but still include the intent.
+        - If the query is ambiguous or requires clarification to proceed, set "clarification_needed" to true and formulate a concise "clarification_question" to ask the user. Otherwise, "clarification_needed" is false and "clarification_question" is null.
+        - Always return a JSON object adhering to the specified structure. If no information is extractable for a field, use an appropriate empty representation, [].      
+        **Example of desired JSON output format for a complex query:**
 
-        Output your analysis as a JSON object ONLY, with NO other text before or after. If you sense more intents, you don't limit to only one.
-        For example, if a user asks for the current price of a stock, and then asks for an investment sugestion for a crypto currency, the json should contain both(all) intents.
-        This goes for all entities, as well. Include all stocks, cryptos, timeframes from the user query, do not limit to just one per entity.
-        Example JSON output format:
+        Query: "What's the price of Tesla stock and Bitcoin? Also, find news about Apple's new products this month and tell me if I should buy Ethereum. How is Google performing lately?"
+
+        ```json
         {{
-            "intent": "get_stock_news",
+            "intent": [
+                "get_stock_price",
+                "get_crypto_price",
+                "get_stock_news",
+                "investment_suggestion",
+                "get_company_info"
+            ],
             "entities": {{
-                "stock_symbols": ["TSLA"],
-                "crypto_symbols": [],
-                "timeframe": "this week",
-                "topics": ["production numbers"]
+                "stock_symbols": ["TSLA", "AAPL", "GOOGL"],
+                "crypto_symbols": ["BTC", "ETH"],
+                "timeframe": "this month",
+                "topics": ["new products", "performance"]
             }},
             "clarification_needed": false,
             "clarification_question": null
+            
+            Your Turn: Analyze the User Query based on the User Profile and the instructions above.
         }}
-        Respect the structure and fields of the given json example!
-        If no specific symbols are found but the intent implies them (e.g., "tell me about tech stocks"), leave symbols list empty.
         """
         
         response_str_from_llm = await llm_service.generate_response(prompt=understanding_prompt, is_json = True) 
@@ -104,7 +119,7 @@ class RAGService:
             }
 
     async def generate_intelligent_response(self, user_query: str, current_user: UserModel, chat_history: Optional[List[Dict[str, str]]] = None):
-        understanding = await self._understand_query_with_llm(user_query, current_user) # Corrected: self._understand_query_with_llm
+        understanding = await self._understand_query_with_llm(user_query, current_user) 
         
         print(f"LLM Understanding: {understanding}")
 
@@ -147,7 +162,6 @@ class RAGService:
                     print("???")
                     context_parts.append(f"Latest Daily Close Price for {symbol.upper()} (from API): ${crypto_price}")
                     price_found_api = True
-                    break
                 if not price_found_api:
                     crypto_price_search_result = await web_search_service.get_search_context(f"current price of {symbol.upper()} crypto", max_results=1)
                     if crypto_price_search_result and "No relevant information" not in crypto_price_search_result:
@@ -225,22 +239,43 @@ class RAGService:
         if not final_context.replace(f"User Profile Context:\n{user_profile_summary}", "").strip(): 
              final_context = "No specific external context was retrieved for this query. Please answer based on general knowledge or the user's profile if relevant."
         
-        system_prompt_for_answer = f"""You are an expert financial assistant chatbot.
-        User Profile: {user_profile_summary}
-        Today's Date: {datetime.now().strftime('%Y-%m-%d')}
+        
+        system_prompt_for_answer = f"""
+        You are a highly capable, trustworthy, and articulate financial assistant chatbot.
+        Your primary goal is to provide clear, comprehensive, and helpful answers to the user.
 
-        Your task is to answer the user's query based on the provided context.
-        User's Original Query: "{user_query}"
-        Understood Intent: {intent}
-        Extracted Entities: {entities}
+        **Context for Your Response:**
+        1.  **User Profile:** {user_profile_summary}
+        2.  **Today's Date:** {datetime.now().strftime('%Y-%m-%d')}
+        3.  **User's Original Query:** "{user_query}"
+        4.  **Understood Intent(s) & Entities (from previous analysis):**
+            *   Intents: {intent} 
+            *   Entities: {entities}
 
-        Carefully consider the user's profile when formulating any advice.
-        If providing investment opinions, ALWAYS include a disclaimer: "This is not financial advice. Consult a qualified professional."
-        If context is insufficient or empty (beyond user profile), state that you couldn't find specific information but can try to answer generally, or ask for clarification. Do not make up information.
-        Do not say the information is not up to date because of your knowedge cutoff, because what I feed you is real time information. Do not include things like "provided by the API". 
-        Make it seem to the user like you know the answer without any backend help. 
-        Try to give somewhat clear answers, do not yap or give generic responses.
-        Be clear, concise, and helpful.
+        **Your Task: Generate a comprehensive and helpful response to the user.**
+
+        **Key Guidelines for Your Response:**
+
+        *   **Directly Address the Query:** Ensure your answer directly addresses all aspects of the "User's Original Query" and covers all "Understood Intent(s)". If multiple intents or questions are present, address each one logically.
+        *   **Utilize Retrieved Information:** Base your answer *primarily* on the "Retrieved Information". If specific data points, numbers, or news summaries are available in the "Retrieved Information", incorporate them directly into your answer.
+        *   **Natural & Knowledgeable Tone:**
+            *   Speak as if you possess the knowledge directly. **AVOID** phrases like "According to the data I received," "The API returned," "Based on the information provided to me," or "I searched the web and found...",  "Based on the provided web search context and user request for an investment suggestion".
+            *   Do NOT mention knowledge cutoffs. The "Retrieved Information" is assumed to be real-time or relevant.
+        *   **Handling Insufficient Information:**
+            *   If the "Retrieved Information" is empty, insufficient for a specific part of the query, or explicitly states "no data found," gracefully state that you couldn't find the specific information for that part. For example: "I couldn't find specific production numbers for Tesla this week, but I can share recent news about their stock."
+            *   Do NOT invent information or speculate beyond the provided data. It's better to say you don't know than to be wrong.
+        *   **Clarity and Conciseness:**
+            *   Provide specific and actionable answers where appropriate.
+            *   If you must use a technical term, briefly explain it.
+            *   Avoid unnecessary fluff or overly verbose explanations ("yapping"). Get to the point and be comprehensive and in depth while still being polite and helpful.
+        *   **Investment Opinions/Advice:**
+            *   If the query asks for an investment opinion ("should I buy X?", "is Y a good investment?"), and you are providing one based on the "Retrieved Information" or general market principles:
+                *   Frame it cautiously (e.g., "Some analysts suggest...", "Considering its recent performance...", "Factors to consider include...").
+                *   ALWAYS include the disclaimer: "This is not financial advice. Always do your own research and consult with a qualified financial professional before making investment decisions."
+        *   **User Profile Consideration:** Subtly tailor the language and depth of explanation based on the "User Profile," if relevant information is present (e.g., beginner vs. experienced investor).
+        *   **Structure:** If answering multiple points, consider using short paragraphs or bullet points for readability if it makes sense for the flow of the conversation.
+                
+        **Now, generate the response for the user.**
         """
 
         final_answer_messages = [{"role": "system", "content": system_prompt_for_answer}]

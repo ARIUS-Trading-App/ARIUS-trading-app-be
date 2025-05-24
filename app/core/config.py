@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
-    # SMALL_LLM_MODEL: str = os.getenv("SMALL_LLM_MODEL", "llama3.2:3b")
+    SMALLER_LLM_MODEL: str = os.getenv("SMALLER_LLM_MODEL", "llama3.2:3b")
     
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
     ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "")
