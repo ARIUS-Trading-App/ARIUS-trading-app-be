@@ -12,8 +12,8 @@ async def get_stock_price(symbol: str):
     search_query = f"current price of {symbol.upper()} stock in USD"
     web_search_result = await web_search_service.get_search_context(search_query, max_results=1)
     if web_search_result and "No relevant information" not in web_search_result:
-        return f"Could not fetch direct API price for {symbol.upper()}. Web search result for '{search_query}': {web_search_result}"
-    return f"Could not retrieve stock price information for {symbol.upper()}/USD via API or web search."
+        return f"Could not fetch direct API price for {symbol.upper()} using primary source. Web search for '{search_query}' found: {web_search_result}"
+    return f"Could not retrieve stock price information for {symbol.upper()} via primary API or web search fallback."
 
 async def get_crypto_price(symbol: str, market: str = None):
     effective_market = market or settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT
@@ -24,8 +24,8 @@ async def get_crypto_price(symbol: str, market: str = None):
     search_query = f"current price of {symbol.upper()} crypto in {effective_market.upper()}"
     web_search_result = await web_search_service.get_search_context(search_query, max_results=1)
     if web_search_result and "No relevant information" not in web_search_result:
-        return f"Could not fetch direct API price for {symbol.upper()}. Web search result for '{search_query}': {web_search_result}"
-    return f"Could not retrieve cryptocurrency price information for {symbol.upper()}/{effective_market.upper()} via API or web search."
+        return f"Could not fetch direct API price for {symbol.upper()} using primary source. Web search for '{search_query}' found: {web_search_result}"
+    return f"Could not retrieve cryptocurrency price information for {symbol.upper()}/{effective_market.upper()} via primary API or web search fallback."
 
 async def get_company_overview(symbol: str):
     data = await financial_data_service.get_company_overview(symbol)

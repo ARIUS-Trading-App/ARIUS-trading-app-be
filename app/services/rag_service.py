@@ -1,12 +1,12 @@
 from app.services.llm_provider_service import llm_service
 from app.models.user import User as UserModel
-from app.llm_tools.tool_schemas import get_tool_schemas_for_llm, AVAILABLE_TOOLS_SCHEMAS 
-from app.llm_tools.tool_functions import TOOL_FUNCTIONS 
+from app.llm_tools.tool_schemas import AVAILABLE_TOOLS_SCHEMAS
+from app.llm_tools.tool_functions import TOOL_FUNCTIONS
 from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime
 import inspect
-import traceback 
+import traceback
 
 MAX_TOOL_ITERATIONS = 6
 
@@ -58,7 +58,6 @@ class RAGService:
             print(f"Error executing tool {tool_name} with args {tool_args}: {e}")
             return f"Error during {tool_name} execution for arguments {tool_args}: {str(e)}. Please check arguments or try an alternative approach."
 
-
     async def generate_intelligent_response(
         self, 
         user_query: str, 
@@ -68,11 +67,11 @@ class RAGService:
         user_profile_summary = self._summarize_user_profile(current_user)
         tool_schemas_for_llm_str = json.dumps(AVAILABLE_TOOLS_SCHEMAS, indent=2) 
         
-        conversation_messages = [] 
+        conversation_messages_for_this_turn = [] 
         if chat_history:
-            conversation_messages.extend(chat_history)
+            conversation_messages_for_this_turn.extend(chat_history)
         
-        current_contextual_query = user_query
+        current_contextual_query_for_llm = user_query
 
         accumulated_tool_outputs = [] 
 
@@ -91,31 +90,36 @@ Available Tools:
 
 **Your Task & Decision Process:**
 
-1.  **Analyze the User's Request & History:** Carefully consider the current user request below, the overall chat history, and any information already gathered from previous tool calls in this turn.
+1.  **Analyze User's Request & History:** Carefully consider the current user request below, the overall chat history (if any from previous turns), and information gathered from tool calls in *this current turn*.
 2.  **Tool Selection (Primary Action):**
-    *   If one or more tools can help gather information to address the *unanswered parts* of the user's request, select the *single most relevant tool* to call NEXT.
+    *   Identify the *next logical piece of information* needed to address any *unanswered parts* of the user's original request.
+    *   If a tool can provide this, select the *single most appropriate tool*.
     *   Respond ONLY with a single JSON object for the chosen tool: {{"tool_name": "TOOL_NAME", "arguments": {{"arg1": "value1", ...}}}}
-    *   Ensure arguments match the tool's schema. Infer arguments like stock symbols (e.g., "Apple" -> "AAPL", "Bitcoin" -> "BTC") if not explicitly provided.
-    *   **Multi-part Queries:** If the user's request has multiple parts (e.g., "price of AAPL and news for MSFT"), you will address them sequentially, one tool call per iteration. Choose the tool for the most immediate, unresolved part.
-    *   **Tool Failure Handling:** If a tool was called previously in this turn and FAILED (e.g., due to API limits, invalid symbol), DO NOT call the exact same tool with the exact same arguments again. Consider an alternative tool (e.g., `general_web_search` if a specific price API fails) or reformulating arguments if the failure seemed due to an input issue. If all direct tools for a piece of information fail, you might need to rely on `general_web_search` or inform the user.
+    *   Ensure arguments match the tool's schema. Infer arguments like stock symbols (e.g., "Apple company" -> "AAPL", "Bitcoin crypto" -> "BTC") if not explicitly provided.
+    *   **Asset Type Specificity:** Pay close attention to tool descriptions. Use `get_stock_price` for company stocks ONLY. Use `get_crypto_price` for cryptocurrencies ONLY.
+    *   **Multi-part Queries:** Address complex queries sequentially, one tool call per iteration for each distinct piece of information needed.
+    *   **Tool Failure Handling:** If a tool was called previously in *this turn* for a specific piece of information and FAILED (e.g., API limit, invalid symbol for that tool), DO NOT call the exact same tool with the exact same arguments again for that same piece of information. Instead, consider:
+        a. Using `general_web_search` as a fallback.
+        b. Choosing a different tool if applicable.
+        c. If the failure was likely due to an incorrect argument (e.g., wrong symbol type for the tool), you may try the *correct* tool with the corrected argument.
+        d. If no alternative exists, you will later synthesize an answer acknowledging this gap.
 3.  **Direct Answer / Clarification (Alternative Actions):**
-    *   If you have gathered enough information from previous tool calls in this turn to comprehensively answer the user's *entire original request*, OR if the request does not require tools (e.g., a simple greeting, general knowledge question you already know), then respond directly in plain text.
-    *   If the request is ambiguous, or you need more specific information from the user to proceed effectively, ask a clarifying question in plain text.
+    *   If ALL parts of the user's original request have been addressed by previous tool calls in this turn, OR if the request is simple and does not require tools (e.g., a greeting), then respond directly in PLAIN TEXT.
+    *   If the request is ambiguous and you need more information from the user to proceed, ask a clarifying question in PLAIN TEXT.
+    *   If you decide to answer directly or ask a question, your entire response should be that text, NOT JSON.
 
 **Information Gathered So Far in This Turn:**
 {json.dumps(accumulated_tool_outputs, indent=2) if accumulated_tool_outputs else "No tool calls yet in this turn."}
 
 **Current User Request (relative to gathered info):**
-"{current_contextual_query}"
+"{current_contextual_query_for_llm}"
 
-Based on all the above, decide your next action (tool call as JSON, or direct answer/clarification as text).
+Based on all the above, decide your next action: either a tool call (JSON object) or a direct textual response/clarification.
 """
-    
+            
             messages_for_llm_tool_selection = [{"role": "system", "content": system_prompt_tool_selection}]
-            if conversation_messages: 
-                 messages_for_llm_tool_selection.extend(conversation_messages)
-            messages_for_llm_tool_selection.append({"role": "user", "content": current_contextual_query})
-
+            messages_for_llm_tool_selection.extend(conversation_messages_for_this_turn)
+            messages_for_llm_tool_selection.append({"role": "user", "content": current_contextual_query_for_llm})
 
             print(f"LLM (Tool Selection) Input Messages (showing last few): {json.dumps(messages_for_llm_tool_selection[-3:], indent=2)}")
             
@@ -132,15 +136,17 @@ Based on all the above, decide your next action (tool call as JSON, or direct an
             try:
                 tool_call_data = json.loads(llm_decision_str_cleaned)
                 
-                if isinstance(tool_call_data, dict) and "tool_name" in tool_call_data and "arguments" in tool_call_data:
+                if isinstance(tool_call_data, dict) and \
+                   "tool_name" in tool_call_data and \
+                   "arguments" in tool_call_data and \
+                   tool_call_data["tool_name"] and \
+                   isinstance(tool_call_data["arguments"], dict):
+                    
                     tool_name = tool_call_data["tool_name"]
                     tool_args = tool_call_data["arguments"]
 
                     if tool_name not in TOOL_FUNCTIONS:
-                        print(f"LLM chose an invalid tool: {tool_name}. Treating as direct response attempt.")
-                       
-                        if not llm_decision_str_cleaned.startswith("{"): 
-                             return llm_decision_str_cleaned 
+                        print(f"LLM chose an invalid tool: {tool_name}. Breaking to synthesis.")
                         break 
 
                     tool_output_str = await self._execute_tool(tool_name, tool_args)
@@ -151,10 +157,10 @@ Based on all the above, decide your next action (tool call as JSON, or direct an
                         "output": tool_output_str
                     })
                     
-                    conversation_messages.append({"role": "assistant", "content": llm_decision_str_cleaned}) 
-                    conversation_messages.append({"role": "user", "content": f"Tool Output from '{tool_name}':\n{tool_output_str}"}) 
+                    conversation_messages_for_this_turn.append({"role": "assistant", "content": llm_decision_str_cleaned}) 
+                    conversation_messages_for_this_turn.append({"role": "user", "content": f"Tool Output from '{tool_name}':\n{tool_output_str}"}) 
                     
-                    current_contextual_query = f"Given the previous actions and tool outputs, what is the next step to fully address my original request: '{user_query}'? Or, if all parts are addressed, synthesize the answer."
+                    current_contextual_query_for_llm = f"Given the previous actions and tool outputs, what is the next step to fully address my original request: '{user_query}'? Or, if all parts are addressed, synthesize the answer."
                     
                     tool_called_this_iteration = True
                     print(f"Tool {tool_name} executed. Output added to context. Iteration {iteration + 1} ends.")
@@ -163,24 +169,28 @@ Based on all the above, decide your next action (tool call as JSON, or direct an
                         print("Max tool iterations reached. Proceeding to final synthesis.")
                         break 
                 else: 
-                    print("LLM provided JSON, but not a valid tool_call format. Assuming direct answer.")
-                    return llm_decision_str_cleaned 
+                    print(f"LLM provided JSON, but not a valid tool_call format or was empty: {llm_decision_str_cleaned}. Assuming it wants to answer directly or is stuck.")
+                    if llm_decision_str_cleaned and llm_decision_str_cleaned != "{}":
+                         return llm_decision_str_cleaned 
+                    else:
+                        print("LLM returned empty or minimal JSON. Breaking to synthesis to avoid empty response.")
+                        break 
             
             except json.JSONDecodeError:
                 print("LLM response was not JSON. Treating as direct answer or clarification.")
                 return llm_decision_str 
             
             if not tool_called_this_iteration:
-                print("No tool called in this iteration, and not a direct answer. Breaking to synthesis or returning current LLM output.")
-                if len(llm_decision_str_cleaned) > 50 and not llm_decision_str_cleaned.startswith("{"): 
-                    return llm_decision_str_cleaned
+                print("No tool called in this iteration, and not a direct answer. Breaking to synthesis.")
                 break 
 
         if not accumulated_tool_outputs:
             print("No tools were successfully called. The LLM might have tried to answer directly or failed to choose a tool.")
-            if 'llm_decision_str_cleaned' in locals() and not llm_decision_str_cleaned.startswith("{"):
+            if 'llm_decision_str_cleaned' in locals() and \
+               llm_decision_str_cleaned and \
+               not llm_decision_str_cleaned.startswith("{"):
                 return llm_decision_str_cleaned
-            return "I was unable to gather the necessary information or formulate a response for your query. Please try rephrasing or be more specific."
+            return "I encountered an issue processing your request and couldn't gather the necessary information. Please try rephrasing."
 
         print(f"\n--- RAG Service: Final Synthesis based on {len(accumulated_tool_outputs)} tool call(s) ---")
         accumulated_outputs_str = "\n\n".join([
@@ -209,14 +219,14 @@ Based on ALL the above information (user profile, original query, chat history c
 -   **Address All Parts:** Ensure your answer directly addresses all aspects of the "user's original query".
 -   **Integrate Information:** Synthesize information from multiple tool calls if necessary. Do NOT just list tool outputs.
 -   **Natural Tone:** Speak as if you possess the knowledge directly. **AVOID** phrases like "The tool 'get_stock_price' returned...", "Based on the web search...", "The arguments for the tool were...". Instead, integrate the information naturally (e.g., "The current price of Apple (AAPL) is $150.").
--   **Handle Errors/Missing Info:** If a tool reported an error or couldn't find specific information, acknowledge that part gracefully (e.g., "I couldn't find the specific P/E ratio for X, but its current price is Y."). Do NOT invent information.
+-   **Handle Errors/Missing Info:** If a tool reported an error or couldn't find specific information (e.g., "Could not fetch direct API price..."), acknowledge that part gracefully (e.g., "I couldn't find the specific P/E ratio for X directly from my primary source, but web search suggests Y."). Do NOT invent information.
 -   **Investment Opinions/Advice:** If the query asks for an investment opinion (e.g., "should I buy X?"):
     *   Frame it cautiously (e.g., "Some analysts suggest...", "Considering its recent performance...", "Factors to consider include...").
     *   ALWAYS include the disclaimer: "This is not financial advice. Always do your own research and consult with a qualified financial professional before making investment decisions."
 -   **Clarity and Conciseness:** Provide specific and actionable answers where appropriate. Briefly explain technical terms if the user profile suggests they are a beginner.
 -   **Structure:** Use paragraphs or bullet points for readability if answering multiple points.
 
-**Chat History (for broader context of the conversation, if provided):**
+**Chat History (for broader context of the conversation, if provided from previous turns):**
 {json.dumps(chat_history, indent=2) if chat_history else "No prior chat history for this session."}
 
 Now, generate the comprehensive final response to the user's original query: "{user_query}"
