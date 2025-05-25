@@ -87,7 +87,6 @@ def update_user(
     db_user = crud_user.get_user(db, user_id)
     if not db_user:
         raise HTTPException(404, "User not found")
-    # optionally check permissions: only allow updating self unless admin
     if db_user.id != current_user.id:
         raise HTTPException(403, "Not enough permissions")
     return crud_user.update_user(db, db_user, user_in)

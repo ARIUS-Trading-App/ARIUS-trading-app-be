@@ -1,5 +1,3 @@
-# app/routes/auth_router.py
-
 from fastapi import APIRouter, HTTPException, Query, Depends, Body
 from fastapi.responses import JSONResponse
 from pydantic import EmailStr
@@ -13,7 +11,7 @@ from app.crud import user as crud_user
 from app.schemas.user import UserCreate
 
 SECRET_KEY = settings.SECRET_KEY
-ALGORITHM  = settings.ALGORITHM  # e.g. "HS256"
+ALGORITHM  = settings.ALGORITHM  
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -26,8 +24,7 @@ async def request_token(email: EmailStr = Body(..., embed=True)):
     try:
         token = create_magic_token(email)
         send_email_link(email, token)
-        # return {"msg": f"Magic link sent to {email}"}
-        #! for dev: return the token so you can copy-paste in Postman
+      
         return {"msg": f"Magic link sent to {email}", "token": token}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not send email: {str(e)}")
@@ -43,21 +40,17 @@ async def verify_token(
     On first‐time login, auto‐create the User record.
     """
     try:
-        # 1) Decode & validate
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=400, detail="Invalid token payload")
 
-        # 2) Lookup or create the User
         user = crud_user.get_user_by_email(db, email)
         if user is None:
-            # derive a simple default username; you can adjust this logic as needed
             username = email.split("@")[0]
             user_in  = UserCreate(username=username, email=email)
             user     = crud_user.create_user(db, user_in)
 
-        # 3) Issue the cookie
         response = JSONResponse(content={"msg": f"Authenticated: {email}"})
         response.set_cookie(
             key="access_token",
@@ -65,7 +58,7 @@ async def verify_token(
             path="/",
             httponly=True,
             samesite="lax",
-        )
+        ) 
         return response
 
     except JWTError:

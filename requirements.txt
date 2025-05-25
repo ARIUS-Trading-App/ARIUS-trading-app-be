@@ -10,3 +10,9 @@ alembic
 authlib
 python-jose[cryptography]
 sendgrid
+openai
+tavily-python
+alpha-vantage
+pinecone
+sentence-transformers
+psycopg2-binary 
