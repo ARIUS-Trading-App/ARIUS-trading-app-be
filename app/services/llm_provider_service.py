@@ -1,8 +1,10 @@
 from ollama import Client
 from ollama import ChatResponse as OllamaChatResponseType
 from ollama import Message as OllamaMessageType 
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, AsyncGenerator
 from app.core.config import settings
+import asyncio
+import threading
 
 class LLMProviderService:
     def __init__(self):
@@ -65,5 +67,59 @@ class LLMProviderService:
         print(f"LLMProviderService.generate_response: Unexpected type received from self.chat(). Type: {type(response_obj)}")
         print(f"Unexpected response_obj content: {response_obj}")
         return "Sorry, an unexpected issue occurred while processing the LLM response."
+    
+    async def generate_streamed_response(
+        self,
+        messages: List[Dict[str, str]],
+        is_json: bool = False
+    ) -> AsyncGenerator[str, None]:
+        """
+        Generates a streamed response from Ollama, yielding content chunks as they arrive.
+        """
+        # Decide which model to use
+        model_for_request = self.model_name if is_json else self.smaller_model_name
+        chat_kwargs = {
+            "model": model_for_request,
+            "messages": messages,
+            "stream": True
+        }
+        if is_json:
+            chat_kwargs["format"] = "json"
+
+        # Grab the running event loop and set up a queue
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[Union[Dict, Exception, None]] = asyncio.Queue()
+
+        def _producer():
+            try:
+                for chunk in self.client.chat(**chat_kwargs):
+                    # Safely schedule queue.put_nowait(chunk) in the event loop thread
+                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, e)
+            finally:
+                # Sentinel to mark end of stream
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        # Start the producer in a real thread
+        thread = threading.Thread(target=_producer, daemon=True)
+        thread.start()
+
+        # Consume the queue from the async context
+        while True:
+            item = await queue.get()
+            if item is None:  # end‐of‐stream sentinel
+                break
+            if isinstance(item, Exception):
+                yield f"STREAM_ERROR: {item}"
+                return
+            # item is a dict chunk; extract the content if present
+            msg = item.get("message", {})
+            content = msg.get("content")
+            if isinstance(content, str):
+                yield content
+
+        # Optionally join the thread (it should already have finished)
+        thread.join(timeout=0.1)
     
 llm_service = LLMProviderService()
