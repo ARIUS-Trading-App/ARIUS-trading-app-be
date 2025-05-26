@@ -67,19 +67,15 @@ class RAGService:
         user_profile_summary = self._summarize_user_profile(current_user)
         tool_schemas_for_llm_str = json.dumps(AVAILABLE_TOOLS_SCHEMAS, indent=2)
 
-        # conversation_messages_for_this_turn will store the evolving history for *this specific turn's* tool selection calls
-        # It starts with the overall chat_history (if any) and adds messages related to tool use within this turn.
         conversation_messages_for_this_turn: List[Dict[str, Any]] = []
         if chat_history:
-            # Make sure history items are dicts, not Pydantic models, if LLM service expects raw dicts
             conversation_messages_for_this_turn.extend([msg if isinstance(msg, dict) else msg.model_dump() for msg in chat_history])
 
-
         current_contextual_query_for_llm = user_query
-        accumulated_tool_outputs = [] # Stores {"tool_name": ..., "arguments": ..., "output": ...} for the final synthesis
+        accumulated_tool_outputs = [] 
 
         for iteration in range(MAX_TOOL_ITERATIONS):
-            yield f"DEBUG: --- RAG Service: Iteration {iteration + 1} / {MAX_TOOL_ITERATIONS} ---\n"
+            # yield f"DEBUG: --- RAG Service: Iteration {iteration + 1} / {MAX_TOOL_ITERATIONS} ---\n"
 
             system_prompt_tool_selection = f"""You are a sophisticated financial assistant. Your primary goal is to accurately understand the user's query and utilize available tools to gather necessary information, or decide to answer directly if appropriate.
 
@@ -119,25 +115,22 @@ Available Tools:
 Based on all the above, decide your next action: either a tool call (JSON object) or a direct textual response/clarification.
 """
             messages_for_llm_tool_selection = [{"role": "system", "content": system_prompt_tool_selection}]
-            # Add conversation history relevant for THIS TURN's tool selection LLM.
-            # This includes overall history + assistant/user messages from tool executions within THIS TURN.
-            messages_for_llm_tool_selection.extend(conversation_messages_for_this_turn) # This should contain the original chat history
-            # The user's current query for this iteration of tool selection
+            messages_for_llm_tool_selection.extend(conversation_messages_for_this_turn)
             messages_for_llm_tool_selection.append({"role": "user", "content": current_contextual_query_for_llm})
 
-            yield f"DEBUG: LLM (Tool Selection) Input Messages (showing last 3): {json.dumps(messages_for_llm_tool_selection[-3:], indent=2)}\n"
+            # yield f"DEBUG: LLM (Tool Selection) Input Messages (showing last 3): {json.dumps(messages_for_llm_tool_selection[-3:], indent=2)}\n"
 
             llm_decision_str = await llm_service.generate_response(
                 prompt=None,
                 history=messages_for_llm_tool_selection,
-                is_json=True # Hint for the LLM service/mock that it should try to output JSON or plain text as per prompt
+                is_json=True 
             )
-            yield f"DEBUG: LLM (Tool Selection) Raw Output: '''{llm_decision_str}'''\n"
+            # yield f"DEBUG: LLM (Tool Selection) Raw Output: '''{llm_decision_str}'''\n"
             llm_decision_str_cleaned = self._clean_llm_json_response(llm_decision_str)
 
             tool_called_this_iteration = False
             try:
-                tool_call_data = json.loads(llm_decision_str_cleaned) # Try to parse as JSON
+                tool_call_data = json.loads(llm_decision_str_cleaned) 
 
                 if isinstance(tool_call_data, dict) and \
                    "tool_name" in tool_call_data and \
@@ -149,60 +142,53 @@ Based on all the above, decide your next action: either a tool call (JSON object
                     tool_args = tool_call_data["arguments"]
 
                     if tool_name not in TOOL_FUNCTIONS:
-                        yield f"WARN: LLM chose an invalid tool: {tool_name}. Breaking to synthesis.\n"
-                        break # Proceed to synthesis
+                        # yield f"WARN: LLM chose an invalid tool: {tool_name}. Breaking to synthesis.\n"
+                        break 
 
-                    yield f"ASSISTANT_ACTION: Planning to use tool '{tool_name}' with arguments: {json.dumps(tool_args)}.\n"
+                    # yield f"ASSISTANT_ACTION: Planning to use tool '{tool_name}' with arguments: {json.dumps(tool_args)}.\n"
                     tool_output_str = await self._execute_tool(tool_name, tool_args)
-                    yield f"ASSISTANT_ACTION: Executed tool '{tool_name}'. Output: {tool_output_str}\n"
+                    # yield f"ASSISTANT_ACTION: Executed tool '{tool_name}'. Output: {tool_output_str}\n"
 
                     accumulated_tool_outputs.append({
                         "tool_name": tool_name, "arguments": tool_args, "output": tool_output_str
                     })
 
-                    # Add LLM's decision (the tool call JSON) and tool's output to this turn's history for the next tool selection iteration
-                    conversation_messages_for_this_turn.append({"role": "assistant", "content": llm_decision_str_cleaned}) # LLM's decision to call tool
-                    conversation_messages_for_this_turn.append({"role": "user", "content": f"Tool Output from '{tool_name}':\n{tool_output_str}"}) # Simulating user providing tool output
+                    conversation_messages_for_this_turn.append({"role": "assistant", "content": llm_decision_str_cleaned}) 
+                    conversation_messages_for_this_turn.append({"role": "user", "content": f"Tool Output from '{tool_name}':\n{tool_output_str}"}) 
 
                     current_contextual_query_for_llm = f"Given the previous actions and tool outputs, what is the next step to fully address my original request: '{user_query}'? Or, if all parts are addressed, synthesize the answer."
                     tool_called_this_iteration = True
 
                     if iteration == MAX_TOOL_ITERATIONS - 1:
-                        yield "DEBUG: Max tool iterations reached. Proceeding to final synthesis.\n"
-                        break # Break from loop to go to final synthesis
-                    # else continue to next iteration
+                        # yield "DEBUG: Max tool iterations reached. Proceeding to final synthesis.\n"
+                        break 
+                
+                else: 
+                    # yield f"WARN: LLM provided JSON, but not a valid tool_call format: '{llm_decision_str_cleaned}'. Assuming it wants to answer directly or is stuck. Breaking to synthesis.\n"
+                    break 
 
-                else: # Valid JSON, but not the expected tool_call format
-                    yield f"WARN: LLM provided JSON, but not a valid tool_call format: '{llm_decision_str_cleaned}'. Assuming it wants to answer directly or is stuck. Breaking to synthesis.\n"
-                    break # Proceed to synthesis
+            except json.JSONDecodeError: 
+                # yield f"DEBUG: LLM response (tool selection phase) was not JSON. Treating as direct answer/clarification.\n"
+                if llm_decision_str_cleaned.strip(): 
+                    yield llm_decision_str_cleaned 
+                # else:
+                    # yield "INFO: Assistant provided an empty direct response. No further output.\n"
+                return 
 
-            except json.JSONDecodeError: # LLM response was not JSON, so it's a direct textual answer as per prompt
-                yield f"DEBUG: LLM response (tool selection phase) was not JSON. Treating as direct answer/clarification.\n"
-                if llm_decision_str_cleaned.strip(): # Make sure it's not empty
-                    yield llm_decision_str_cleaned # Stream the direct answer
-                else:
-                    yield "INFO: Assistant provided an empty direct response. No further output.\n"
-                return # Stop generation, as the answer has been provided.
-
-            if not tool_called_this_iteration and iteration < MAX_TOOL_ITERATIONS -1 : # Should not happen if logic above is correct unless loop is exited
-                 yield "WARN: No tool called in this iteration, and not a direct answer. Breaking to synthesis.\n"
-                 break
+            if not tool_called_this_iteration and iteration < MAX_TOOL_ITERATIONS -1 : 
+                #    yield "WARN: No tool called in this iteration, and not a direct answer. Breaking to synthesis.\n"
+                   break
 
 
-        # --- Final Synthesis Phase ---
         if not accumulated_tool_outputs:
-            yield "INFO: No tools were successfully called during this turn.\n"
-            # Check if the very first llm_decision was a non-JSON (direct answer) and already handled.
-            # If we are here, it means either tools failed, or max iterations reached with no useful tool calls,
-            # or an unexpected state. We'll attempt synthesis anyway.
-            # The original code had a path here: if 'llm_decision_str_cleaned' in locals() ... return llm_decision_str_cleaned
-            # This should have been handled by the JSONDecodeError path which yields and returns.
-            # So, if we reach here with no tool outputs, it implies the loop completed without successful tool use OR direct answer.
-            # The final synthesis prompt is designed to handle cases with no tool output too.
-            yield "ASSISTANT_ACTION: Attempting to provide an answer without specific tool information, or based on general knowledge.\n"
+            # yield "INFO: No tools were successfully called during this turn.\n"
+            # If we are here, it means the loop completed without successful tool use OR a direct answer from the tool selection phase.
+            # We proceed to synthesis, which can handle cases with no tool output.
+            # yield "ASSISTANT_ACTION: Attempting to provide an answer without specific tool information, or based on general knowledge.\n"
+            pass # Let synthesis handle this based on the original query
 
 
-        yield f"\nDEBUG: --- RAG Service: Final Synthesis based on {len(accumulated_tool_outputs)} tool call(s) ---\n"
+        # yield f"\nDEBUG: --- RAG Service: Final Synthesis based on {len(accumulated_tool_outputs)} tool call(s) ---\n"
         accumulated_outputs_str = "\n\n".join([
             f"Tool: {item['tool_name']}\nArguments: {json.dumps(item['arguments'])}\nOutput:\n{item['output']}"
             for item in accumulated_tool_outputs
@@ -245,13 +231,13 @@ Now, generate the comprehensive final response to the user's original query: "{u
             {"role": "user", "content": f"Please provide a comprehensive answer to my query: \"{user_query}\", using all the context and information gathered."}
         ]
 
-        yield f"DEBUG: LLM (Final Synthesis) Input Messages (System + User): {json.dumps(synthesis_llm_messages, indent=2)}\n"
-        yield "ASSISTANT_ACTION: Synthesizing the final answer...\n"
+        # yield f"DEBUG: LLM (Final Synthesis) Input Messages (System + User): {json.dumps(synthesis_llm_messages, indent=2)}\n"
+        # yield "ASSISTANT_ACTION: Synthesizing the final answer...\n"
 
         async for chunk in llm_service.generate_streamed_response(
             messages=synthesis_llm_messages
         ):
-            print(chunk)
+            # print(chunk) # This is a side-effect (prints to console), not a yield. You might want to remove or handle it differently.
             yield chunk
         yield "\n" # Ensure a final newline for clean output
 
