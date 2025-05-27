@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.crud import portfolio as crud
+from app.crud import transaction as crud_tx
+from app.crud import user as crud_pf
 from app.schemas.portfolio import PortfolioCreate, Portfolio, PositionCreate, Position
 
 from app.services.portfolio_service import compute_portfolio_value
 
 from app.crud.transaction import create_transaction, get_transactions
-from app.schemas.transaction import Transaction, TransactionCreate
+from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.services.portfolio_pnl_service import compute_pnl
+from app.services.llm_provider_service import llm_service
+
+from datetime import date
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
 
