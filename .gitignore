@@ -174,3 +174,7 @@ cython_debug/
 .pypirc
 
 .env
+.test.db
+test.py
+test_chatbot_cli.py
+test_web_search.py

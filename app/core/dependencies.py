@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, Cookie
+from fastapi import Depends, HTTPException, Header, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -8,20 +8,47 @@ from app.crud import user as crud_user
 from app.models.user import User
 
 def get_current_user(
-    access_token: str = Cookie(None, alias="access_token"),
+    authorization: str = Header(None), # Changed from Cookie to Header
     db: Session = Depends(get_db),
-) -> User:
-    """Retrieve the current user based on the access token."""
-    if access_token is None:
-        raise HTTPException(status_code=401, detail="Missing authentication token")
+) -> User: # Assuming User is your SQLAlchemy model or Pydantic model for a user
+    """Retrieve the current user based on the Authorization header."""
+    if authorization is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"}, # Standard practice for Bearer tokens
+        )
+
+    # Expecting "Bearer <token>"
+    parts = authorization.split()
+    if parts[0].lower() != "bearer" or len(parts) == 1 or len(parts) > 2:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    token = parts[1]
+
     try:
-        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise JWTError()
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = crud_user.get_user_by_email(db, email)
+            # Using a more specific status code for invalid token content
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Invalid token: Missing subject",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=f"Invalid token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user = crud_user.get_user_by_email(db, email=email) # Ensure your crud_user function takes email as a kwarg or matches signature
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
     return user
