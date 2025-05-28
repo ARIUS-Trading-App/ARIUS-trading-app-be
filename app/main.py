@@ -9,6 +9,7 @@ from app.routes import auth_router
 from app.routes import user_router
 from app.routes import portfolio_router
 from app.routes import chat_router
+from app.routes import financial_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -33,6 +34,8 @@ app.include_router(chat_router.router)
 
 # Include portfolio router
 app.include_router(portfolio_router.router)
+
+app.include_router(financial_router.router)
 
 @app.get("/")
 async def root():

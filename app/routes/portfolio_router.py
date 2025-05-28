@@ -6,7 +6,7 @@ from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.crud import portfolio as crud
 from app.crud import transaction as crud_tx
-from app.crud import user as crud_pf
+from app.crud import portfolio as crud_pf
 from app.schemas.portfolio import PortfolioCreate, Portfolio, PositionCreate, Position
 
 from app.services.portfolio_service import compute_portfolio_value
@@ -43,10 +43,10 @@ def list_portfolios(
 
 @router.post("/{pf_id}/positions", response_model=Position)
 def add_position(
+    data: PositionCreate,
     pf_id: int = Path(..., gt=0),
-    data: PositionCreate = Depends(),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
 ):
     """
     Add a position to a portfolio.
