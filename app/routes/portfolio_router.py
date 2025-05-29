@@ -14,6 +14,9 @@ from app.services.portfolio_service import compute_portfolio_value
 from app.crud.transaction import create_transaction, get_transactions
 from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.services.portfolio_pnl_service import compute_pnl
+
+from app.services.llm_provider_service import llm_service
+
 from app.services.portfolio_service import get_portfolio_24h_change_percentage
 from app.services.llm_provider_service import llm_service
 from app.models.user import User
@@ -118,7 +121,7 @@ async def portfolio_insights(
 @router.post(
     "/{pf_id}/transactions",
     response_model=Transaction,
-    status_code=status.HTTP_201_CREATED,
+    status_code=201,
     summary="Record a new buy/sell transaction"
 )
 def add_transaction(
@@ -221,7 +224,7 @@ def update_transaction(
 
 @router.delete(
     "/{pf_id}/transactions/{tx_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=204,
     summary="Delete a transaction record"
 )
 def delete_transaction(
