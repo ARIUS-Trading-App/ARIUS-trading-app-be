@@ -18,6 +18,9 @@ alpha-vantage
 pinecone
 sentence-transformers
 psycopg2-binary 
+newsapi-python
+tf-keras
+nltk
 cachetools
 finnhub-python
 yfinance

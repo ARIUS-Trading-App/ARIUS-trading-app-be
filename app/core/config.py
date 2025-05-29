@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     FINNHUB_FX_PROVIDER_DEFAULT: str = os.getenv("FINNHUB_FX_PROVIDER_DEFAULT", "OANDA") # Added Finnhub default FX provider
 
 
+    NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "your-newsapi-key")
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
