@@ -14,6 +14,7 @@ from app.services.portfolio_service import compute_portfolio_value
 from app.crud.transaction import create_transaction, get_transactions
 from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.services.portfolio_pnl_service import compute_pnl
+from app.services.portfolio_service import get_portfolio_24h_change_percentage
 from app.services.llm_provider_service import llm_service
 from app.models.user import User
 
@@ -174,6 +175,26 @@ async def get_portfolio_pnl(
     if not p or p.user_id != current_user.id:
         raise HTTPException(404, "Portfolio not found")
     return await compute_pnl(db, pf_id)
+
+@router.get("/{pf_id}/change-24h") # NEW ENDPOINT
+async def get_portfolio_24h_change(
+    pf_id: int = Path(..., gt=0, description="The ID of the portfolio to calculate 24h change for"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Compute the overall 24-hour percentage change of the portfolio.
+    """
+    p = crud.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    change_percentage = await get_portfolio_24h_change_percentage(db, portfolio_id=pf_id)
+    
+    return {
+        "portfolio_id": pf_id,
+        "change_24h_percentage": change_percentage
+    }
 
 @router.put(
     "/{pf_id}/transactions/{tx_id}",

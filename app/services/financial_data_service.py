@@ -657,5 +657,91 @@ class FinancialDataService:
         except Exception as e:
             print(f"Error fetching Treasury Yield for {maturity} ({yf_treasury_symbol}) from yfinance: {e}")
             return None
+        
+    async def get_price_change_24h(self, symbol: str):
+        """
+        Fetches the price change for a symbol over the last 24 hours (approximately).
+        This can be for stocks, crypto (e.g., "BTC-USD"), or FX (e.g., "EURUSD=X").
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            # Fetch data for the last 2 days. Interval '1h' is a good compromise.
+            # For highly volatile or thinly traded assets, a shorter interval might be better,
+            # but '1h' is generally available for a 2-day period.
+            # auto_adjust=False to get raw 'Close' prices.
+            hist_df = await self._run_sync(ticker.history, period="2d", interval="1h", auto_adjust=False)
+
+            if hist_df.empty or len(hist_df) < 2:
+                # Fallback to a more granular interval if 1h failed or returned insufficient data
+                hist_df = await self._run_sync(ticker.history, period="2d", interval="5m", auto_adjust=False)
+                if hist_df.empty or len(hist_df) < 2:
+                    print(f"Not enough historical data for {symbol} in the last 2 days to calculate 24h change.")
+                    return None
+
+            # Ensure the index is a DatetimeIndex and convert to UTC for consistent comparison
+            if not isinstance(hist_df.index, pd.DatetimeIndex):
+                print(f"History index for {symbol} is not a DatetimeIndex. Type: {type(hist_df.index)}")
+                return None
+            
+            # Convert to UTC if timezone-aware, or localize to UTC if naive (assuming naive times are UTC)
+            if hist_df.index.tz is None:
+                hist_df.index = hist_df.index.tz_localize('UTC')
+            else:
+                hist_df.index = hist_df.index.tz_convert('UTC')
+            
+            hist_df = hist_df.sort_index() # Ensure data is sorted by time
+
+            # Get the latest available data point
+            latest_data_point = hist_df.iloc[-1]
+            latest_price = latest_data_point['Close']
+            latest_timestamp = latest_data_point.name # This is a pd.Timestamp
+
+            # Determine the target timestamp for 24 hours ago
+            target_timestamp_24h_ago = latest_timestamp - timedelta(hours=24)
+
+            # Find the closest available data point to 24 hours ago using asof
+            # .asof finds the last row whose index is less than or equal to the target_timestamp_24h_ago
+            price_24h_ago_series = hist_df['Close'].asof(target_timestamp_24h_ago)
+
+            if pd.isna(price_24h_ago_series):
+                # If no data point is found at or before the 24h ago mark (e.g., new listing, sparse data)
+                # use the earliest available point in our 2-day window as a fallback.
+                price_24h_ago = hist_df['Close'].iloc[0]
+                timestamp_of_price_24h_ago = hist_df.index[0]
+                print(f"No data at or before {target_timestamp_24h_ago} for {symbol}. Using earliest point: {price_24h_ago} at {timestamp_of_price_24h_ago}")
+            else:
+                price_24h_ago = price_24h_ago_series
+                # For clarity, find the actual timestamp of the matched 'asof' price
+                # This involves getting the index of the 'asof' result.
+                # Find the index (timestamp) of the value returned by asof
+                temp_df_for_asof_index = hist_df[hist_df.index <= target_timestamp_24h_ago]
+                if not temp_df_for_asof_index.empty:
+                    timestamp_of_price_24h_ago = temp_df_for_asof_index.index[-1]
+                else: # Should not happen if asof returned a non-NaN value from the original df
+                    timestamp_of_price_24h_ago = hist_df.index[0]
+
+
+            if pd.isna(latest_price) or pd.isna(price_24h_ago):
+                print(f"Could not determine valid current or 24h ago price for {symbol}.")
+                return None
+
+            change_amount = latest_price - price_24h_ago
+            change_percent = (change_amount / price_24h_ago) * 100 if price_24h_ago != 0 else 0
+
+            return {
+                "symbol": symbol,
+                "current_price": float(latest_price),
+                "price_24h_ago": float(price_24h_ago),
+                "change_amount": float(change_amount),
+                "change_percent": float(change_percent),
+                "latest_price_timestamp": latest_timestamp.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                "reference_price_24h_ago_timestamp": timestamp_of_price_24h_ago.strftime('%Y-%m-%d %H:%M:%S %Z')
+            }
+
+        except Exception as e:
+            print(f"Error calculating 24h price change for {symbol} using yfinance: {e}")
+            # import traceback
+            # traceback.print_exc() # For more detailed error logging during development
+            return None
 
 financial_data_service = FinancialDataService()

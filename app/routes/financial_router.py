@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from typing import Optional, Literal # For literal types in query params
 from app.services.financial_data_service import financial_data_service as financial_service
 from app.core.config import settings
+from app.schemas.portfolio import PriceChange24hResponse
 
 # Create a router
 router = APIRouter(
@@ -258,3 +259,26 @@ async def get_treasury_yield_endpoint(
     if data and "data" in data:
         return data
     raise HTTPException(status_code=404, detail=f"Treasury Yield data not found for {maturity} maturity, interval {interval} or API error: {data}")
+
+@router.get(
+    "/symbol/{symbol}/change-24h",
+    response_model=PriceChange24hResponse,
+    summary="Get 24-Hour Price Change",
+    description="Fetches the approximate 24-hour price change for a given financial symbol (stock, crypto, FX)."
+)
+async def get_24h_symbol_change(
+    symbol: str = Path(..., title="Stock Symbol")
+):
+    """
+    Provides the current price, the price approximately 24 hours ago,
+    the absolute change, and the percentage change for the given symbol.
+    It uses 1-hour interval data over the last 2 days, falling back to 5-minute intervals if needed.
+    Timestamps are in UTC.
+    """
+    change_data = await financial_service.get_price_change_24h(symbol)
+    if not change_data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not retrieve 24-hour price change data for symbol '{symbol}'. The symbol may be invalid, or recent intraday data might be unavailable."
+        )
+    return PriceChange24hResponse(**change_data)
