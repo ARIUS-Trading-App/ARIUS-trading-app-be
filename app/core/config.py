@@ -5,7 +5,7 @@ import os
 load_dotenv()
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = os.getenv("DABASE_URL", "sqlite:///./default.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./default.db")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "a-secret-key")
     ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
@@ -15,15 +15,17 @@ class Settings(BaseSettings):
     
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
-    SMALL_LLM_MODEL: str = os.getenv("SMALL_LLM_MODEL", "llama3.2:3b")
+    SMALLER_LLM_MODEL: str = os.getenv("SMALLER_LLM_MODEL", "llama3.2:3b")
     
-    TAVILY_API_KEY: str = os.getenv(TAVILY_API_KEY, "")
-    ALPHA_VANTAGE_API_KEY: str = os.getenv(ALPHA_VANTAGE_API_KEY, "")
-    PINECONE_API_KEY: str = os.getenv(PINECONE_API_KEY, "")
-    PINECONE_ENVIRONMENT: str = os.getenv(PINECONE_ENVIRONMENT, "")
-    PINECONE_INDEX_NAME: str = os.getenv(PINECONE_INDEX_NAME, "trading-app-rag")
+    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
+    PINECONE_ENVIRONMENT: str = os.getenv("PINECONE_ENVIRONMENT", "")
+    PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "trading-app-rag")
     EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
     
+    ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT: str = os.getenv("ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT", "USD")
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'

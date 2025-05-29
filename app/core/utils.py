@@ -17,7 +17,7 @@ def create_magic_token(email: str) -> str:
     """
     payload = {
         "sub": email,
-        "exp": datetime.utcnow() + timedelta(minutes=15)
+        "exp": datetime.utcnow() + timedelta(days=7)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -25,7 +25,7 @@ def send_email_link(recipient: str, token: str):
     """
     Send a magic link to the user's email for login.
     """
-    login_url = f"http://localhost:8000/auth/verify-token?token={token}"
+    login_url = f"http://localhost:3000/profile/login/magic-link?token={token}"
     message = Mail(
         from_email=EMAIL_SENDER,
         to_emails=recipient,

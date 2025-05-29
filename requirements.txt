@@ -13,3 +13,8 @@ sendgrid
 openai
 pandas
 prophet
+tavily-python
+alpha-vantage
+pinecone
+sentence-transformers
+psycopg2-binary 

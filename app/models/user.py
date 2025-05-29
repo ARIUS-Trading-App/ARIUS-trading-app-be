@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Enum as
 from sqlalchemy.sql import func
 from app.db.session import Base
 import enum
+from sqlalchemy.orm import relationship
 
 class TradingExperienceLevel(str, enum.Enum):
     BEGINNER = "Beginner"
@@ -25,25 +26,25 @@ class InvestmentGoals(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    
-    id = Column(Integer, primary_key=True, index = True)
+
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
-    
     full_name = Column(String(100), nullable=True)
     profile_picture_url = Column(String(255), nullable=True)
-
     is_active = Column(Boolean, default=True)
-
     trading_experience = Column(SAEnum(TradingExperienceLevel), nullable=True)
     risk_appetite = Column(SAEnum(RiskAppetite), nullable=True)
-    investment_goals = Column(SAEnum(InvestmentGoals), nullable=True) 
-    preferred_asset_classes = Column(JSON, nullable=True) 
+    investment_goals = Column(SAEnum(InvestmentGoals), nullable=True)
+    preferred_asset_classes = Column(JSON, nullable=True)
     interests_for_feed = Column(JSON, nullable=True)
-
-    date_of_birth = Column(DateTime(timezone=False), nullable=True) 
+    date_of_birth = Column(DateTime(timezone=False), nullable=True)
     country_of_residence = Column(String(100), nullable=True)
     timezone = Column(String(50), default="UTC", nullable=False)
 
+    # Relationship to Portfolios (optional, but good for accessing user's portfolios)
+    # If you want to access portfolios from a user instance like user.portfolios
+    portfolios = relationship("Portfolio", back_populates="user")
+
     def __repr__(self):
-        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')"
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
