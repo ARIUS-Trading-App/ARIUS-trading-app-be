@@ -19,12 +19,7 @@ class FeedItem(Base):
     original_id = Column(String(200), nullable=False)
     content     = Column(Text, nullable=False)
 
-    # store the column under the actual DB name "metadata",
-    # but keep the Python attribute name different to avoid the conflict
-    _metadata       = Column("metadata", JSON, default={})
-
-    # expose it publicly under a new name, e.g. `meta` or `metadata_json`
-    metadata_json   = synonym("_metadata")
+    feed_metadata    = Column(JSON, default={})              # e.g. {"url": "...", "author": "..."}
 
     fetched_at  = Column(DateTime(timezone=False), server_default=func.now())
     summary     = Column(Text, nullable=True)

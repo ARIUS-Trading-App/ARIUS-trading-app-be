@@ -25,3 +25,12 @@ class Portfolio(BaseModel):
 
     class Config:
         from_attributes = True
+
+class PriceChange24hResponse(BaseModel):
+    symbol: str
+    current_price: float
+    price_24h_ago: float
+    change_amount: float
+    change_percent: float
+    latest_price_timestamp: str
+    reference_price_24h_ago_timestamp: str
