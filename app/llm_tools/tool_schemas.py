@@ -85,7 +85,7 @@ TOOL_EXPLAIN_FINANCIAL_CONCEPT = {
 
 TOOL_GENERAL_WEB_SEARCH = {
     "name": "general_web_search",
-    "description": "Performs a general web search when other specialized tools are not suitable or have failed. Useful for broad queries, current events not strictly financial, or as a fallback for information not found in financial databases.",
+    "description": "Performs a general web search when other specialized tools are not suitable or have failed. Useful for broad queries, current events not strictly financial, or as a fallback for information not found in financial databases. Also highly useful for an initial search to identify specific items (e.g., 'best pharma stocks', 'top trending cryptocurrencies') which can then be used with other tools to get details like prices.", # Enhanced description
     "parameters": {
         "type": "object",
         "properties": {

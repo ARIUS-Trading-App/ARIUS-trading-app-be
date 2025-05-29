@@ -161,16 +161,17 @@ class FinancialDataService:
                                            from_currency=from_currency_symbol,
                                            to_currency=effective_to_currency)
             # print(data)
-            if data and "Realtime Currency Exchange Rate" in data and \
-               "5. Exchange Rate" in data["Realtime Currency Exchange Rate"]:
+            if data and data["5. Exchange Rate"]:
+                print("!!!!!")
+                print(data)
                 # print("_________ Crypto Exchange Rate Found _________")
                 return {
-                    "from_currency": data["Realtime Currency Exchange Rate"]["1. From_Currency Code"],
-                    "to_currency": data["Realtime Currency Exchange Rate"]["3. To_Currency Code"],
-                    "exchange_rate": data["Realtime Currency Exchange Rate"]["5. Exchange Rate"],
-                    "last_refreshed": data["Realtime Currency Exchange Rate"]["6. Last Refreshed"],
-                    "bid_price": data["Realtime Currency Exchange Rate"].get("8. Bid Price"), # Use .get() as bid/ask might not always be present
-                    "ask_price": data["Realtime Currency Exchange Rate"].get("9. Ask Price")
+                    "from_currency": data["1. From_Currency Code"],
+                    "to_currency": data["3. To_Currency Code"],
+                    "exchange_rate": data["5. Exchange Rate"],
+                    "last_refreshed": data["6. Last Refreshed"],
+                    "bid_price": data.get("8. Bid Price"), # Use .get() as bid/ask might not always be present
+                    "ask_price": data.get("9. Ask Price")
                 }
             return None
         except Exception as e:
