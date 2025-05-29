@@ -77,6 +77,26 @@ class FinancialDataService:
         except Exception as e:
             print(f"Error fetching company overview for {symbol}: {e}")
             return None
+        
+    async def get_latest_new_for_stock(self, symbol: str, limit: int = 5):
+        news_query = f"latest financial news for {symbol} stock" # update this to be better
+        #! there was an error : news_context = await web_search_services.get_search_context(news_query, max_results = limit, ["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"])
+        news_context = await web_search_services.get_search_context(
+            news_query,
+            max_results=limit,
+            allowed_domains=["reuters.com", "bloomberg.com", "wsj.com", "marketwatch.com"]
+        )
+        return news_context if news_context else "No specific news found via web search."
+
+    async def get_daily_series(self, symbol: str, outputsize: str = "compact"):
+        """
+        Return OHLC data for a given symbol.
+        keys: 'Time Series (Daily)' → {date: { '1. open':..., '4. close':... }}
+        """
+        data, _ = await self._run_sync(
+            self.ts.get_daily, symbol=symbol, outputsize=outputsize
+        )
+        return data.get("Time Series (Daily)", {})
 
     async def get_income_statement(self, symbol: str):
         """Fetches annual and quarterly income statements for a given stock symbol."""

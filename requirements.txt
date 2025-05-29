@@ -11,6 +11,8 @@ authlib
 python-jose[cryptography]
 sendgrid
 openai
+pandas
+prophet
 tavily-python
 alpha-vantage
 pinecone
