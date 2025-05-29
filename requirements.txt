@@ -24,3 +24,4 @@ nltk
 cachetools
 finnhub-python
 yfinance
+plotly
