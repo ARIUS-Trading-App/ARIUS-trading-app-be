@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     
     ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT: str = os.getenv("ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT", "USD")
 
+    NEWSAPI_KEY: str = os.getenv("NEWS_API_KEY", "your-newsapi-key")
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
