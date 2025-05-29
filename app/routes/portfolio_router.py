@@ -15,6 +15,7 @@ from app.crud.transaction import create_transaction, get_transactions
 from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.services.portfolio_pnl_service import compute_pnl
 from app.services.llm_provider_service import llm_service
+from app.models.user import User
 
 from datetime import date
 
@@ -220,3 +221,22 @@ def delete_transaction(
     # Deleting the record simply removes it; your P&L & holdings
     # will be recalculated on next request from remaining transactions.
     return
+
+@router.get("/positions/search-by-symbol", response_model=List[Position])
+def get_all_user_positions_by_symbol(
+    symbol: str = Query(..., description="Stock symbol to search for (e.g., AAPL)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve all positions for a specific symbol across all of the current user's portfolios.
+    """
+    # The function get_all_positions_for_symbol_by_user is assumed to be in your crud.portfolio module
+    # (aliased as 'crud' or 'crud_pf' in your imports)
+    positions = crud.get_all_positions_for_symbol_by_user(db=db, user_id=current_user.id, symbol=symbol)
+    if not positions:
+        # It's common to return an empty list if no positions are found,
+        # but you could raise 404 if you prefer that behavior for no matches.
+        # For now, returning an empty list is standard.
+        pass # Return empty list if no positions are found
+    return positions

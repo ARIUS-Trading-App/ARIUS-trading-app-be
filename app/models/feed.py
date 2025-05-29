@@ -20,7 +20,7 @@ class FeedItem(Base):
     source      = Column(String(100), nullable=False)   # ex. "reuters", "twitter"
     original_id = Column(String(200), nullable=False)   # external ID
     content     = Column(Text, nullable=False)
-    metadata    = Column(JSON, default={})              # e.g. {"url": "...", "author": "..."}
+    feed_metadata    = Column(JSON, default={})              # e.g. {"url": "...", "author": "..."}
     fetched_at  = Column(DateTime(timezone=False), server_default=func.now())
     summary     = Column(Text, nullable=True)
 

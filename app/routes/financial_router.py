@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from typing import Optional, Literal # For literal types in query params
 from app.services.financial_data_service import financial_data_service as financial_service
+from app.core.config import settings
 
 # Create a router
 router = APIRouter(

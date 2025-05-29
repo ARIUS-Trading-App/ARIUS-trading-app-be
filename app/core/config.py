@@ -14,20 +14,27 @@ class Settings(BaseSettings):
     EMAIL_SENDER: str = os.getenv("EMAIL_SENDER", "no-reply@yourdomain.com")
     
     OLLAMA_HOST: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
-    SMALLER_LLM_MODEL: str = os.getenv("SMALLER_LLM_MODEL", "llama3.2:3b")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b") # Corrected model name format
+    SMALLER_LLM_MODEL: str = os.getenv("SMALLER_LLM_MODEL", "llama3.2:3b") # Corrected model name format
     
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
-    ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+    ALPHA_VANTAGE_API_KEY: str = os.getenv("ALPHA_VANTAGE_API_KEY", "") # Kept for potential other uses
+    FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "") # Added Finnhub API Key
+
     PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
     PINECONE_ENVIRONMENT: str = os.getenv("PINECONE_ENVIRONMENT", "")
     PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "trading-app-rag")
     EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
     
-    ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT: str = os.getenv("ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT", "USD")
+    # Default market/provider settings
+    ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT: str = os.getenv("ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT", "USD") # Kept for compatibility
+    FINNHUB_CRYPTO_EXCHANGE_DEFAULT: str = os.getenv("FINNHUB_CRYPTO_EXCHANGE_DEFAULT", "BINANCE") # Added Finnhub default crypto exchange
+    FINNHUB_FX_PROVIDER_DEFAULT: str = os.getenv("FINNHUB_FX_PROVIDER_DEFAULT", "OANDA") # Added Finnhub default FX provider
+
 
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
-        
+        # extra = 'ignore' # If you want to ignore extra fields from .env not defined in Settings
+
 settings = Settings()
