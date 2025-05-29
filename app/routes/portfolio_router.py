@@ -14,7 +14,9 @@ from app.services.portfolio_service import compute_portfolio_value
 from app.crud.transaction import create_transaction, get_transactions
 from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.services.portfolio_pnl_service import compute_pnl
+from app.services.portfolio_service import get_portfolio_24h_change_percentage
 from app.services.llm_provider_service import llm_service
+from app.models.user import User
 
 from datetime import date
 
@@ -174,6 +176,26 @@ async def get_portfolio_pnl(
         raise HTTPException(404, "Portfolio not found")
     return await compute_pnl(db, pf_id)
 
+@router.get("/{pf_id}/change-24h") # NEW ENDPOINT
+async def get_portfolio_24h_change(
+    pf_id: int = Path(..., gt=0, description="The ID of the portfolio to calculate 24h change for"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Compute the overall 24-hour percentage change of the portfolio.
+    """
+    p = crud.get_portfolio(db, pf_id)
+    if not p or p.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    change_percentage = await get_portfolio_24h_change_percentage(db, portfolio_id=pf_id)
+    
+    return {
+        "portfolio_id": pf_id,
+        "change_24h_percentage": change_percentage
+    }
+
 @router.put(
     "/{pf_id}/transactions/{tx_id}",
     response_model=Transaction,
@@ -220,3 +242,22 @@ def delete_transaction(
     # Deleting the record simply removes it; your P&L & holdings
     # will be recalculated on next request from remaining transactions.
     return
+
+@router.get("/positions/search-by-symbol", response_model=List[Position])
+def get_all_user_positions_by_symbol(
+    symbol: str = Query(..., description="Stock symbol to search for (e.g., AAPL)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve all positions for a specific symbol across all of the current user's portfolios.
+    """
+    # The function get_all_positions_for_symbol_by_user is assumed to be in your crud.portfolio module
+    # (aliased as 'crud' or 'crud_pf' in your imports)
+    positions = crud.get_all_positions_for_symbol_by_user(db=db, user_id=current_user.id, symbol=symbol)
+    if not positions:
+        # It's common to return an empty list if no positions are found,
+        # but you could raise 404 if you prefer that behavior for no matches.
+        # For now, returning an empty list is standard.
+        pass # Return empty list if no positions are found
+    return positions
