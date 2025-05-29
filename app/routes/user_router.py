@@ -18,7 +18,7 @@ router = APIRouter(
     "/",
     response_model=User,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    # dependencies=[Depends(get_current_user)],
 )
 def create_user(
     user_in: UserCreate,
@@ -53,7 +53,7 @@ def read_users(
     "/me",
     response_model=User,
 )
-def read_current_user(current_user: UserModel = Depends(get_current_user)):
+def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.get(

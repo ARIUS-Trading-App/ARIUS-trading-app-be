@@ -11,3 +11,13 @@ authlib
 python-jose[cryptography]
 sendgrid
 openai
+pandas
+prophet
+tavily-python
+alpha-vantage
+pinecone
+sentence-transformers
+psycopg2-binary 
+cachetools
+finnhub-python
+yfinance

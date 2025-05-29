@@ -52,13 +52,13 @@ async def verify_token(
             user     = crud_user.create_user(db, user_in)
 
         response = JSONResponse(content={"msg": f"Authenticated: {email}"})
-        response.set_cookie(
-            key="access_token",
-            value=token,
-            path="/",
-            httponly=True,
-            samesite="lax",
-        )
+        # response.set_cookie(
+        #     key="access_token",
+        #     value=token,
+        #     path="/",
+        #     httponly=True,
+        #     samesite="lax",
+        # ) 
         return response
 
     except JWTError:
