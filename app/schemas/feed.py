@@ -8,7 +8,7 @@ class FeedItemBase(BaseModel):
     source: str
     original_id: str
     content: str
-    metadata: dict = {}
+    feed_metadata: dict = {}
 
 class FeedItemCreate(FeedItemBase):
     pass

@@ -3,19 +3,20 @@ from app.models.user import User as UserModel
 from app.llm_tools.tool_schemas import AVAILABLE_TOOLS_SCHEMAS
 from app.llm_tools.tool_functions import TOOL_FUNCTIONS
 from typing import Dict, List, Optional, Any, AsyncGenerator, Set, Tuple
+from app.core.config import settings
 import json
 from datetime import datetime
 import inspect
 import traceback
 from cachetools import TTLCache
 import asyncio
-import re 
+import re
 
-MAX_TOOL_ITERATIONS = 5 
+MAX_TOOL_ITERATIONS = 5
 
 class RAGService:
     def __init__(self):
-        self.tool_execution_cache = TTLCache(maxsize=200, ttl=60) 
+        self.tool_execution_cache = TTLCache(maxsize=200, ttl=60)
 
     def _summarize_user_profile(self, user: UserModel) -> str:
         summary = f"User: {user.username} (Email: {user.email})\n"
@@ -32,13 +33,20 @@ class RAGService:
         return summary.strip()
 
     def _clean_llm_json_response(self, llm_response_str: str) -> str:
+        # Remove <think>...</think> blocks
         cleaned_str = re.sub(r"<think>.*?</think>", "", llm_response_str, flags=re.DOTALL).strip()
+        
+        # Try to find ```json ... ```
         json_match_explicit = re.search(r"```json\s*(.*?)\s*```", cleaned_str, re.DOTALL | re.IGNORECASE)
         if json_match_explicit:
             return json_match_explicit.group(1).strip()
+
+        # Try to find ``` ... ``` (generic code block)
         json_match_generic = re.search(r"```\s*(.*?)\s*```", cleaned_str, re.DOTALL)
         if json_match_generic:
             return json_match_generic.group(1).strip()
+
+        # Try to find the first and last brace for a JSON object
         first_brace = cleaned_str.find('{')
         last_brace = cleaned_str.rfind('}')
         if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
@@ -47,7 +55,9 @@ class RAGService:
                 json.loads(potential_json_object)
                 return potential_json_object
             except json.JSONDecodeError:
-                pass
+                pass # Not a valid JSON object
+
+        # Try to find the first and last bracket for a JSON array
         first_bracket = cleaned_str.find('[')
         last_bracket = cleaned_str.rfind(']')
         if first_bracket != -1 and last_bracket != -1 and first_bracket < last_bracket:
@@ -56,8 +66,9 @@ class RAGService:
                 json.loads(potential_json_array)
                 return potential_json_array
             except json.JSONDecodeError:
-                pass
-        return cleaned_str
+                pass # Not a valid JSON array
+                
+        return cleaned_str # Return the cleaned string if no JSON structure is reliably found
 
     async def _execute_tool(self, tool_name: str, tool_args_from_llm: Dict[str, Any], user_id: Optional[int] = None) -> Tuple[str, Dict[str, Any]]:
         """
@@ -66,8 +77,8 @@ class RAGService:
         """
         if tool_name not in TOOL_FUNCTIONS:
             error_msg = f"Error: Tool '{tool_name}' not found."
-            print(error_msg)
-            return error_msg, tool_args_from_llm 
+            print(error_msg) # Keep console print for server-side logging
+            return error_msg, tool_args_from_llm
 
         tool_function = TOOL_FUNCTIONS[tool_name]
         sig = inspect.signature(tool_function)
@@ -79,47 +90,53 @@ class RAGService:
             final_tool_args['user_id'] = user_id
 
         for param_name, param_obj in sig.parameters.items():
-            if param_name == 'user_id':
+            if param_name == 'user_id': # Already handled or not applicable if user_id is None
                 continue
 
             if param_name in tool_args_from_llm:
                 value = tool_args_from_llm[param_name]
                 param_type = param_obj.annotation
-                coerced_value = value
+                coerced_value = value # Default to original value
                 try:
+                    # Type coercion and basic sanitization
                     if param_type is str and isinstance(value, str):
-                        coerced_value = value.strip('"\'')
+                        coerced_value = value.strip('"\'') # Remove surrounding quotes if any
                     elif param_type is int:
-                         if isinstance(value, str): coerced_value = int(value.strip())
-                         elif isinstance(value, (int, float)): coerced_value = int(value)
-                         else: raise ValueError(f"Cannot convert type {type(value)} to int")
+                        if isinstance(value, str): coerced_value = int(value.strip())
+                        elif isinstance(value, (int, float)): coerced_value = int(value) # Allow float to int conversion
+                        else: raise ValueError(f"Cannot convert type {type(value)} to int")
                     elif param_type is float:
-                         if isinstance(value, str): coerced_value = float(value.strip())
-                         elif isinstance(value, (int, float)): coerced_value = float(value)
-                         else: raise ValueError(f"Cannot convert type {type(value)} to float")
+                        if isinstance(value, str): coerced_value = float(value.strip())
+                        elif isinstance(value, (int, float)): coerced_value = float(value)
+                        else: raise ValueError(f"Cannot convert type {type(value)} to float")
+                    # Add more coercions as needed (e.g., bool, List[str])
                 except (ValueError, TypeError) as e:
                     print(f"Warning: Could not coerce/sanitize arg '{param_name}' value '{value}' for tool {tool_name}: {e}. Skipping.")
-                    continue 
+                    continue # Skip this argument if coercion fails
                 final_tool_args[param_name] = coerced_value
-            elif param_obj.default is inspect.Parameter.empty and param_name not in final_tool_args:
-                 missing_required_args.append(param_name)
+            elif param_obj.default is inspect.Parameter.empty and param_name not in final_tool_args: # Check if already populated (e.g. user_id)
+                # This is a required argument not provided by LLM
+                missing_required_args.append(param_name)
 
         if missing_required_args:
             error_msg = f"Error: Missing required argument(s) for tool '{tool_name}': {', '.join(missing_required_args)}."
             print(error_msg)
-            return error_msg, final_tool_args
+            return error_msg, final_tool_args # Return LLM's args for context, though some might be missing
 
+        # Warn about extraneous arguments from LLM
         for arg_name in tool_args_from_llm:
-             if arg_name not in sig.parameters:
-                 print(f"Warning: Argument '{arg_name}' (value: {tool_args_from_llm[arg_name]}) not accepted by tool {tool_name}. Ignoring.")
+            if arg_name not in sig.parameters:
+                print(f"Warning: Argument '{arg_name}' (value: {tool_args_from_llm[arg_name]}) not accepted by tool {tool_name}. Ignoring.")
 
+        # Create a cache key based on tool name and sorted, JSON-stringified args
         cache_key_args_list = []
         for k, v in sorted(final_tool_args.items()):
-             if isinstance(v, (dict, list)):
-                 cache_key_args_list.append((k, json.dumps(v, sort_keys=True)))
-             else:
-                 cache_key_args_list.append((k,v))
+            if isinstance(v, (dict, list)): # For mutable types, dump to string
+                cache_key_args_list.append((k, json.dumps(v, sort_keys=True)))
+            else:
+                cache_key_args_list.append((k,v))
         cache_key = (tool_name, tuple(cache_key_args_list))
+
 
         if cache_key in self.tool_execution_cache:
             print(f"Cache HIT for tool: {tool_name} with args: {final_tool_args}")
@@ -134,9 +151,11 @@ class RAGService:
             else:
                 result = tool_function(**final_tool_args)
             
+            # Convert result to string for caching and LLM consumption
             result_str = json.dumps(result) if isinstance(result, (dict, list)) else str(result)
             print(f"Tool {tool_name} result (first 300 chars): {result_str[:300]}...")
 
+            # Cache the successful result string
             self.tool_execution_cache[cache_key] = result_str
 
             return result_str, final_tool_args
@@ -146,31 +165,32 @@ class RAGService:
             traceback.print_exc()
             error_message = f"Error during {tool_name} execution: {str(e)}. Arguments used: {json.dumps(final_tool_args)}."
             
+            # Add specific hints for common financial tool errors
             if tool_name in ["get_stock_price", "get_company_overview", "get_historical_stock_data", "get_intraday_stock_data", "get_income_statement", "get_balance_sheet", "get_cash_flow_statement", "get_company_earnings"]:
                 symbol = final_tool_args.get('symbol')
                 if symbol:
-                     error_message += f" Please double-check if '{symbol}' is a valid stock ticker symbol on exchanges covered by Yahoo Finance."
-                     
+                    error_message += f" Please double-check if '{symbol}' is a valid stock ticker symbol on exchanges covered by Yahoo Finance."
+                    
             elif tool_name in ["get_crypto_price", "get_daily_crypto_data"]:
-                 symbol = final_tool_args.get('symbol')
-                 market = final_tool_args.get('market')
-                 if symbol:
-                     error_message += f" Please double-check if '{symbol}' is a valid cryptocurrency symbol, potentially paired with '{market or settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT}'."
+                symbol = final_tool_args.get('symbol')
+                market = final_tool_args.get('market')
+                if symbol:
+                    error_message += f" Please double-check if '{symbol}' is a valid cryptocurrency symbol, potentially paired with '{market or settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT}'."
 
             elif tool_name in ["get_asset_price_change_24h"]:
-                 symbol = final_tool_args.get('symbol')
-                 if symbol:
-                     error_message += f" Please double-check if '{symbol}' is a valid symbol for a stock, crypto (e.g., BTC-USD), or FX pair (e.g., EURUSD=X)."
+                symbol = final_tool_args.get('symbol')
+                if symbol:
+                    error_message += f" Please double-check if '{symbol}' is a valid symbol for a stock, crypto (e.g., BTC-USD), or FX pair (e.g., EURUSD=X)."
             
             elif tool_name in ["get_portfolio_positions", "get_portfolio_market_value", "get_portfolio_daily_change_percentage", "get_portfolio_pnl"]:
-                 portfolio_name = final_tool_args.get('portfolio_name')
-                 portfolio_id = final_tool_args.get('portfolio_id')
-                 user_id_arg = final_tool_args.get('user_id')
-                 if user_id_arg is not None: 
-                      if not portfolio_name and not portfolio_id:
-                           error_message += f" User {user_id_arg} has portfolios, but the request did not specify which one (name or ID). Use `list_my_portfolios` first if needed."
-                      else:
-                           error_message += f" Ensure the specified portfolio ({portfolio_name or portfolio_id}) exists and belongs to user {user_id_arg}."
+                portfolio_name = final_tool_args.get('portfolio_name')
+                portfolio_id = final_tool_args.get('portfolio_id')
+                user_id_arg = final_tool_args.get('user_id') # This is the user_id passed to the tool
+                if user_id_arg is not None: # Check if user_id was part of the tool's signature and passed
+                    if not portfolio_name and not portfolio_id:
+                        error_message += f" User {user_id_arg} has portfolios, but the request did not specify which one (name or ID). Use `list_my_portfolios` first if needed."
+                    else:
+                        error_message += f" Ensure the specified portfolio ({portfolio_name or portfolio_id}) exists and belongs to user {user_id_arg}."
             return error_message, final_tool_args
 
     async def generate_intelligent_response(
@@ -185,6 +205,7 @@ class RAGService:
         simple_closings_bye = ["bye", "goodbye", "see ya", "later", "cya"]
         simple_banter = ["how are you", "how are you doing", "what's up", "sup", "hows it going"]
 
+        # Handle simple, direct interactions without full RAG loop
         if normalized_query in simple_greetings:
             simple_response_messages = [{"role": "system", "content": "You are a friendly and concise assistant. Respond warmly to the user's greeting."}, {"role": "user", "content": user_query}]
             async for chunk in llm_service.generate_streamed_response(messages=simple_response_messages, use_smaller_model=True): yield chunk
@@ -203,15 +224,16 @@ class RAGService:
 
         current_turn_full_history: List[Dict[str, Any]] = []
         if chat_history:
+            # Ensure chat history items are dicts
             current_turn_full_history.extend([msg if isinstance(msg, dict) else msg.model_dump() for msg in chat_history])
         current_turn_full_history.append({"role": "user", "content": f"My current request is: \"{user_query}\""})
         
-        executed_tool_calls_this_turn: Set[Tuple[str, frozenset]] = set()
+        executed_tool_calls_this_turn: Set[Tuple[str, frozenset]] = set() # To track (tool_name, frozenset_of_final_args_items)
         accumulated_tool_outputs_for_synthesis: List[Dict[str, Any]] = [] 
         contextual_prompt_for_llm_action = f"Based on my original request: \"{user_query}\", and the information gathered so far (if any), what is the next logical step to fully address my request?"
 
         for iteration in range(MAX_TOOL_ITERATIONS):
-            yield f"DEBUG: --- RAG Service: Iteration {iteration + 1} / {MAX_TOOL_ITERATIONS} ---\n"
+            # yield f"DEBUG: --- RAG Service: Iteration {iteration + 1} / {MAX_TOOL_ITERATIONS} ---\n" # Suppressed
 
             system_prompt_tool_selection = f"""You are a sophisticated and methodical financial assistant. Your primary goal is to accurately understand the user's query, identify ALL necessary pieces of information, and use available tools sequentially to gather them, or decide to answer directly if appropriate.
 
@@ -232,43 +254,43 @@ Available Tools (ensure your chosen tool_name and arguments match these schemas 
 
 **Your Iterative Task & Decision Process (Strive for NEW information each step):**
 1.  **Analyze Original Request & Progress:**
-    *   Carefully re-read the "ORIGINAL USER REQUEST".
-    *   Review "ALL INFORMATION GATHERED SO FAR IN THIS ENTIRE TURN".
-    *   Consider the overall chat history (provided in earlier messages if this is not the first turn).
-    *   Identify ALL aspects of the original request that have *not yet* been addressed. What is the *next distinct piece of information* required?
-    *   For portfolio-related queries (value, PnL, positions): if the user has multiple portfolios, you might first need to use `list_my_portfolios` if the specific portfolio isn't clear from the query. Then, use the relevant portfolio ID or name with other portfolio tools. If only one portfolio exists, tools may default to it if designed that way, or you can infer its ID.
+    * Carefully re-read the "ORIGINAL USER REQUEST".
+    * Review "ALL INFORMATION GATHERED SO FAR IN THIS ENTIRE TURN".
+    * Consider the overall chat history (provided in earlier messages if this is not the first turn).
+    * Identify ALL aspects of the original request that have *not yet* been addressed. What is the *next distinct piece of information* required?
+    * For portfolio-related queries (value, PnL, positions): if the user has multiple portfolios, you might first need to use `list_my_portfolios` if the specific portfolio isn't clear from the query. Then, use the relevant portfolio ID or name with other portfolio tools. If only one portfolio exists, tools may default to it if designed that way, or you can infer its ID.
 
 2.  **Tool Selection (Primary Action - Aim for NOVELTY):**
-    *   If a tool can provide this *new* piece of information, select the single most appropriate tool.
-    *   **Argument Inference:** If not explicitly provided by the user, infer necessary arguments like stock symbols (e.g., "Apple company" -> "AAPL", "Bitcoin crypto" -> "BTC") or crypto markets. Be precise.
-    *   **Asset Type Specificity (CRITICAL):** Pay EXTREMELY close attention to tool descriptions. Use `get_stock_price` for stocks (AAPL, MSFT), `get_crypto_price` for crypto (BTC, ETH). If unsure about an asset's type, use `general_web_search` to clarify *before* attempting a price tool.
-    *   **Complex Queries & Sequential Operations:** Break down the "ORIGINAL USER REQUEST" into sub-questions. Address one sub-question per tool call. Example: "Price of AAPL and BTC" requires two separate `get_stock_price` and `get_crypto_price` calls in two iterations. If a list of items needs processing (e.g., "find 3 pharma stocks and their prices"), first use `general_web_search` to get the list, then use specific tools for each item in subsequent iterations.
-    *   **Avoiding Redundancy (CRITICAL):** DO NOT re-request information if an identical tool call (same tool_name and arguments) is already listed in "ALL INFORMATION GATHERED SO FAR IN THIS ENTIRE TURN". Choosing a redundant call will result in corrective feedback.
-    *   **Tool Failure Handling (from previous attempts in THIS turn):** If a tool FAILED previously in *this turn* for specific arguments (e.g., API limit, invalid symbol *for that specific tool*):
+    * If a tool can provide this *new* piece of information, select the single most appropriate tool.
+    * **Argument Inference:** If not explicitly provided by the user, infer necessary arguments like stock symbols (e.g., "Apple company" -> "AAPL", "Bitcoin crypto" -> "BTC") or crypto markets. Be precise.
+    * **Asset Type Specificity (CRITICAL):** Pay EXTREMELY close attention to tool descriptions. Use `get_stock_price` for stocks (AAPL, MSFT), `get_crypto_price` for crypto (BTC, ETH). If unsure about an asset's type, use `general_web_search` to clarify *before* attempting a price tool.
+    * **Complex Queries & Sequential Operations:** Break down the "ORIGINAL USER REQUEST" into sub-questions. Address one sub-question per tool call. Example: "Price of AAPL and BTC" requires two separate `get_stock_price` and `get_crypto_price` calls in two iterations. If a list of items needs processing (e.g., "find 3 pharma stocks and their prices"), first use `general_web_search` to get the list, then use specific tools for each item in subsequent iterations.
+    * **Avoiding Redundancy (CRITICAL):** DO NOT re-request information if an identical tool call (same tool_name and arguments) is already listed in "ALL INFORMATION GATHERED SO FAR IN THIS ENTIRE TURN". Choosing a redundant call will result in corrective feedback.
+    * **Tool Failure Handling (from previous attempts in THIS turn):** If a tool FAILED previously in *this turn* for specific arguments (e.g., API limit, invalid symbol *for that specific tool*):
         a. If failure was due to an incorrect argument type (e.g., stock symbol for a crypto tool), try the *correct* tool type.
         b. Consider `general_web_search` as a fallback for factual data.
         c. Choose a different, relevant tool if applicable.
         d. If no alternative is clear, you may need to proceed to synthesize an answer acknowledging this gap later.
-    *   Respond ONLY with a single JSON object for your chosen tool: `{{"tool_name": "TOOL_NAME", "arguments": {{"arg1": "value1", ...}}}}`
+    * Respond ONLY with a single JSON object for your chosen tool: {{"tool_name": "TOOL_NAME", "arguments": {{"arg1": "value1", ...}}}}
 
 3.  **Direct Answer / Clarification (Alternative Actions):**
-    *   If ALL parts of the "ORIGINAL USER REQUEST" have been addressed by tool calls in "ALL INFORMATION GATHERED SO FAR...", OR if the request is simple and clearly does not require tools, then respond directly in PLAIN TEXT. Your entire response should be that text, NOT JSON.
-    *   If the request is ambiguous and you need more information *from the user* to proceed effectively, ask a clarifying question in PLAIN TEXT.
+    * If ALL parts of the "ORIGINAL USER REQUEST" have been addressed by tool calls in "ALL INFORMATION GATHERED SO FAR...", OR if the request is simple and clearly does not require tools, then respond directly in PLAIN TEXT. Your entire response should be that text, NOT JSON.
+    * If the request is ambiguous and you need more information *from the user* to proceed effectively, ask a clarifying question in PLAIN TEXT.
 
 Based on all the above, and the current contextual query/situation described in the latest user message below, decide your next action.
 """
             
             messages_for_llm_decision = []
             messages_for_llm_decision.append({"role": "system", "content": system_prompt_tool_selection})
-            messages_for_llm_decision.extend(current_turn_full_history)
-            messages_for_llm_decision.append({"role": "user", "content": contextual_prompt_for_llm_action})
+            messages_for_llm_decision.extend(current_turn_full_history) # Add the evolving history of this turn
+            messages_for_llm_decision.append({"role": "user", "content": contextual_prompt_for_llm_action}) # The specific task for this iteration
 
-            yield f"DEBUG: LLM (Tool Selection) Input History (last 3 messages): {json.dumps(messages_for_llm_decision[-3:], indent=2)}\n"
-            llm_decision_str_raw = await llm_service.generate_response(prompt=None, history=messages_for_llm_decision, is_json=False, use_smaller_model=False)
-            yield f"DEBUG: LLM (Tool Selection) Raw Output: '''{llm_decision_str_raw}'''\n"
-            current_turn_full_history.append({"role": "assistant", "content": llm_decision_str_raw})
+            # yield f"DEBUG: LLM (Tool Selection) Input History (last 3 messages): {json.dumps(messages_for_llm_decision[-3:], indent=2)}\n" # Suppressed
+            llm_decision_str_raw = await llm_service.generate_response(prompt=None, history=messages_for_llm_decision, is_json=False, use_smaller_model=False) # Use full model for decisions
+            # yield f"DEBUG: LLM (Tool Selection) Raw Output: '''{llm_decision_str_raw}'''\n" # Suppressed
+            current_turn_full_history.append({"role": "assistant", "content": llm_decision_str_raw}) # Add LLM's decision to history
             llm_decision_cleaned_for_parsing = self._clean_llm_json_response(llm_decision_str_raw)
-            yield f"DEBUG: LLM (Tool Selection) Cleaned for Parsing: '''{llm_decision_cleaned_for_parsing}'''\n"
+            # yield f"DEBUG: LLM (Tool Selection) Cleaned for Parsing: '''{llm_decision_cleaned_for_parsing}'''\n" # Suppressed
 
             tool_call_attempted_this_iteration = False
             try:
@@ -276,62 +298,75 @@ Based on all the above, and the current contextual query/situation described in 
                 if isinstance(tool_call_data, dict) and "tool_name" in tool_call_data and "arguments" in tool_call_data:
                     tool_name = tool_call_data["tool_name"]
                     tool_args_from_llm = tool_call_data.get("arguments", {})
-                    if not isinstance(tool_args_from_llm, dict): tool_args_from_llm = {}
+                    if not isinstance(tool_args_from_llm, dict): tool_args_from_llm = {} # Ensure args is a dict
 
                     tool_call_attempted_this_iteration = True
                     
+                    # Execute the tool
                     tool_output_str, final_args_used = await self._execute_tool(
                         tool_name, tool_args_from_llm, user_id=current_user.id
                     ) 
-                    yield f"ASSISTANT_ACTION: Executed tool '{tool_name}'. Output (first 100 chars): {tool_output_str[:100]}...\n"
+                    # yield f"ASSISTANT_ACTION: Executed tool '{tool_name}'. Output (first 100 chars): {tool_output_str[:100]}...\n" # Suppressed
 
+                    # Create a signature for the current call based on final, processed args
                     final_args_for_key_list = []
-                    for k, v in sorted(final_args_used.items()):
+                    for k, v in sorted(final_args_used.items()): # Sort for consistent key
                         if isinstance(v, (dict, list)):
-                             final_args_for_key_list.append((k, json.dumps(v, sort_keys=True)))
+                            final_args_for_key_list.append((k, json.dumps(v, sort_keys=True)))
                         else:
-                             final_args_for_key_list.append((k,v))
+                            final_args_for_key_list.append((k,v))
                     current_call_signature = (tool_name, frozenset(final_args_for_key_list))
 
-                  
+                
                     if current_call_signature in executed_tool_calls_this_turn:
-                        yield f"INFO: LLM attempted to re-call {tool_name} with args effectively {final_args_used} which was already processed THIS TURN. Guiding LLM.\n"
+                        # yield f"INFO: LLM attempted to re-call {tool_name} with args effectively {final_args_used} which was already processed THIS TURN. Guiding LLM.\n" # Suppressed
+                        # This is a redundant call within the same turn. Provide feedback to LLM.
                         feedback_for_llm = f"System Feedback: The tool '{tool_name}' with arguments effectively resulting in {json.dumps(final_args_used)} has ALREADY been successfully processed in this turn. Please choose a tool to gather *different, new* information for the original request ('{user_query}'), or synthesize the final answer if all parts are now covered."
-                        current_turn_full_history.append({"role": "user", "content": feedback_for_llm})
-                        contextual_prompt_for_llm_action = feedback_for_llm
-                        if iteration == MAX_TOOL_ITERATIONS - 1: break
-                        else: continue
+                        current_turn_full_history.append({"role": "user", "content": feedback_for_llm}) # Add feedback as if it's a user message
+                        contextual_prompt_for_llm_action = feedback_for_llm # Update prompt for next LLM decision
+                        if iteration == MAX_TOOL_ITERATIONS - 1: break # Max iterations, move to synthesis
+                        else: continue # Try another decision in the next iteration
 
                     executed_tool_calls_this_turn.add(current_call_signature)
                     accumulated_tool_outputs_for_synthesis.append({ 
                         "tool_name": tool_name, "arguments": final_args_used, "output": tool_output_str
                     })
 
+                    # Add tool output to history for the LLM's context in the next iteration (as if user provided it)
                     tool_result_feedback_for_history = f"Tool Output from '{tool_name}' (arguments: {json.dumps(final_args_used)}):\n{tool_output_str}"
                     current_turn_full_history.append({"role": "user", "content": tool_result_feedback_for_history}) 
                     
+                    # Update contextual prompt for the next iteration
                     contextual_prompt_for_llm_action = f"Okay, the tool '{tool_name}' provided output (see above). Based on my original request: \"{user_query}\", and all information gathered so far, what is the NEXT piece of NEW information needed? Or, if all parts are addressed, provide the final answer in plain text."
                     
                     if iteration == MAX_TOOL_ITERATIONS - 1:
-                        yield "DEBUG: Max tool iterations reached. Proceeding to final synthesis.\n"
-                        break 
+                        # yield "DEBUG: Max tool iterations reached. Proceeding to final synthesis.\n" # Suppressed
+                        break # Reached max iterations, proceed to synthesis
                 else: 
-                    yield f"WARN: LLM response (tool selection phase) was not valid JSON tool call format after cleaning: '''{llm_decision_cleaned_for_parsing}'''. Treating as direct answer/clarification.\n"
-                    if llm_decision_cleaned_for_parsing.strip(): 
+                    # LLM's response was valid JSON but not a tool call (e.g. {"answer": "..."})
+                    # OR it was not a dict, or missing keys. Treat as direct answer.
+                    # yield f"WARN: LLM response (tool selection phase) was not valid JSON tool call format after cleaning: '''{llm_decision_cleaned_for_parsing}'''. Treating as direct answer/clarification.\n" # Suppressed
+                    if llm_decision_cleaned_for_parsing.strip(): # If there's actual text content
                         async for chunk in self._stream_plain_text(llm_decision_cleaned_for_parsing): yield chunk
-                    return 
+                    return # This is a final response path
 
             except json.JSONDecodeError: 
-                yield f"DEBUG: LLM response (tool selection phase) was not valid JSON after cleaning. Treating as direct answer/clarification: '''{llm_decision_cleaned_for_parsing}'''\n"
-                if llm_decision_cleaned_for_parsing.strip(): 
+                # LLM's response was not valid JSON at all. Treat as direct answer/clarification.
+                # yield f"DEBUG: LLM response (tool selection phase) was not valid JSON after cleaning. Treating as direct answer/clarification: '''{llm_decision_cleaned_for_parsing}'''\n" # Suppressed
+                if llm_decision_cleaned_for_parsing.strip(): # If there's actual text content
                     async for chunk in self._stream_plain_text(llm_decision_cleaned_for_parsing): yield chunk
-                return 
+                return # This is a final response path
 
+            # If no tool call was attempted (e.g. LLM output empty after cleaning, or not a tool call and not caught above as direct answer)
+            # and we are not at the last iteration, break to synthesis.
+            # This handles cases where the LLM might output nothing or something unparsable that isn't a direct answer.
             if not tool_call_attempted_this_iteration and iteration < MAX_TOOL_ITERATIONS - 1 :
-                   yield "WARN: No tool call attempted by LLM in this iteration, and not parsed as a direct answer. Breaking to synthesis.\n"
-                   break
+                # yield "WARN: No tool call attempted by LLM in this iteration, and not parsed as a direct answer. Breaking to synthesis.\n" # Suppressed
+                break
         
-        yield f"\nDEBUG: --- RAG Service: Final Synthesis based on {len(accumulated_tool_outputs_for_synthesis)} tool call(s) this turn ---\n"
+        # --- Final Synthesis Step ---
+        # This block is reached if the loop completes (max iterations) or is broken intentionally to synthesize.
+        # yield f"\nDEBUG: --- RAG Service: Final Synthesis based on {len(accumulated_tool_outputs_for_synthesis)} tool call(s) this turn ---\n" # Suppressed
         accumulated_outputs_str = "\n\n".join([
             f"Tool: {item['tool_name']}\nArguments: {json.dumps(item['arguments'])}\nOutput:\n{item['output']}"
             for item in accumulated_tool_outputs_for_synthesis
@@ -372,21 +407,24 @@ Now, generate the comprehensive final response to the user's original query for 
 Your response should be in plain text.
 """
         synthesis_llm_messages = [{"role": "system", "content": system_prompt_synthesis}]
+        # We don't add current_turn_full_history here because the system prompt for synthesis already incorporates
+        # the relevant parts of it (original query, tool outputs as user messages, prior chat history).
 
-        yield f"DEBUG: LLM (Final Synthesis) Input System Prompt (first 300 chars): {system_prompt_synthesis[:300]}...\n"
+        # yield f"DEBUG: LLM (Final Synthesis) Input System Prompt (first 300 chars): {system_prompt_synthesis[:300]}...\n" # Suppressed
 
         async for chunk in llm_service.generate_streamed_response(
             messages=synthesis_llm_messages,
-            use_smaller_model=False
+            use_smaller_model=False # Use the full model for high-quality synthesis
         ):
             yield chunk
-        yield "\n"
+        yield "\n" # Ensure a final newline for formatting
 
     async def _stream_plain_text(self, text: str, chunk_size: int = 10) -> AsyncGenerator[str, None]:
+        """Helper to stream plain text in small chunks."""
         for i in range(0, len(text), chunk_size):
             yield text[i:i+chunk_size]
-            await asyncio.sleep(0.001) 
-        if text and not text.endswith("\n"):
-             yield "\n"
+            await asyncio.sleep(0.001) # Small delay to simulate streaming
+        if text and not text.endswith("\n"): # Ensure a final newline if not present
+            yield "\n"
 
 rag_service = RAGService()
