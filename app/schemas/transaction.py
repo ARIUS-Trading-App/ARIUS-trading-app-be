@@ -1,5 +1,3 @@
-# app/schemas/transaction.py
-
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional, List
@@ -7,6 +5,7 @@ from app.models.transaction import TransactionType
 import re
 
 class TransactionBase(BaseModel):
+    """Base schema for a transaction, containing core fields and validation."""
     symbol: str = Field(..., example="AAPL")
     type: TransactionType
     quantity: float = Field(..., gt=0, example=10)
@@ -19,9 +18,11 @@ class TransactionBase(BaseModel):
         return v
 
 class TransactionCreate(TransactionBase):
+    """Schema used for logging a new transaction."""
     pass
 
 class TransactionUpdate(BaseModel):
+    """Schema for updating an existing transaction, with all fields optional."""
     symbol: Optional[str] = Field(None, example="AAPL")
     type: Optional[TransactionType]
     quantity: Optional[float] = Field(None, gt=0)
@@ -34,6 +35,7 @@ class TransactionUpdate(BaseModel):
         return v
 
 class Transaction(TransactionBase):
+    """Schema for a transaction retrieved from the database."""
     id: int
     timestamp: datetime
 

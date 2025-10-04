@@ -8,18 +8,33 @@ from app.crud import user as crud_user
 from app.models.user import User
 
 def get_current_user(
-    authorization: str = Header(None), # Changed from Cookie to Header
+    authorization: str = Header(None),
     db: Session = Depends(get_db),
-) -> User: # Assuming User is your SQLAlchemy model or Pydantic model for a user
-    """Retrieve the current user based on the Authorization header."""
+) -> User:
+    """FastAPI dependency to authenticate and retrieve the current user.
+
+    This function inspects the 'Authorization: Bearer <token>' header, decodes
+    the JWT, and fetches the corresponding user from the database. It's used
+    to protect routes that require user authentication.
+
+    Args:
+        authorization (str, optional): The content of the Authorization header.
+        db (Session, optional): The database session dependency.
+
+    Returns:
+        User: The authenticated user's database object.
+
+    Raises:
+        HTTPException: 401 for missing, malformed, or invalid tokens, or
+                       404 if the user from the token is not found in the database.
+    """
     if authorization is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"}, # Standard practice for Bearer tokens
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Expecting "Bearer <token>"
     parts = authorization.split()
     if parts[0].lower() != "bearer" or len(parts) == 1 or len(parts) > 2:
         raise HTTPException(
@@ -34,7 +49,6 @@ def get_current_user(
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            # Using a more specific status code for invalid token content
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail="Invalid token: Missing subject",
@@ -47,7 +61,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = crud_user.get_user_by_email(db, email=email) # Ensure your crud_user function takes email as a kwarg or matches signature
+    user = crud_user.get_user_by_email(db, email=email)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     

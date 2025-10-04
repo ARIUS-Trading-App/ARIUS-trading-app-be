@@ -18,9 +18,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/request-token")
 async def request_token(email: EmailStr = Body(..., embed=True)):
-    """
-    Send a magic link to the user's email for login.
-    """
+    """Creates a magic link token and sends it to the user's email."""
     try:
         token = create_magic_token(email)
         send_email_link(email, token)
@@ -35,9 +33,10 @@ async def verify_token(
     token: str = Query(...),
     db:    Session = Depends(get_db),
 ):
-    """
-    Verify the token when the user clicks the magic link.
-    On first‐time login, auto‐create the User record.
+    """Verifies a magic link token and authenticates the user.
+
+    If the user is logging in for the first time, their account is
+    automatically created.
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -52,13 +51,6 @@ async def verify_token(
             user     = crud_user.create_user(db, user_in)
 
         response = JSONResponse(content={"msg": f"Authenticated: {email}"})
-        # response.set_cookie(
-        #     key="access_token",
-        #     value=token,
-        #     path="/",
-        #     httponly=True,
-        #     samesite="lax",
-        # ) 
         return response
 
     except JWTError:

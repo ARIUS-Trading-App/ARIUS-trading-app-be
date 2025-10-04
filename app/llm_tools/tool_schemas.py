@@ -1,6 +1,14 @@
-# app/llm_tools/tool_schemas.py
+"""Defines the schemas for all tools available to the LLM agent.
 
-# --- Existing Tool Schemas (ensure descriptions are accurate for yfinance) ---
+This module contains dictionary-based definitions for each function that the
+RAG (Retrieval-Augmented Generation) service can execute. These schemas inform
+the language model about the tool's name, its purpose, and the parameters it
+accepts, following a structure similar to common tool-use APIs.
+
+The `AVAILABLE_TOOLS_SCHEMAS` list aggregates all tool definitions for easy
+injection into the LLM's system prompt.
+"""
+
 TOOL_GET_STOCK_PRICE = {
     "name": "get_stock_price",
     "description": "Fetches the current trading price for a specific publicly traded company's stock symbol (e.g., AAPL, MSFT) using Yahoo Finance data. Use this for real-time stock prices ONLY for company stocks. Do NOT use for cryptocurrencies.",
@@ -29,7 +37,7 @@ TOOL_GET_CRYPTO_PRICE = {
             "market": {
                 "type": "string",
                 "description": "The market currency to quote against (e.g., USD, EUR). Defaults to USD if not specified.",
-                "optional": True # Made optional in schema, handled by default in function
+                "optional": True
             }
         },
         "required": ["symbol"]
@@ -51,7 +59,7 @@ TOOL_GET_COMPANY_OVERVIEW = {
     }
 }
 
-TOOL_GET_FINANCIAL_NEWS = { # This tool uses general web search, not yfinance directly
+TOOL_GET_FINANCIAL_NEWS = {
     "name": "get_financial_news",
     "description": "Searches for recent financial news and articles from major financial news websites related to specific companies, stocks, cryptocurrencies, or general market topics. Useful for understanding recent developments, sentiment, and analysis.",
     "parameters": {
@@ -101,7 +109,6 @@ TOOL_GENERAL_WEB_SEARCH = {
     }
 }
 
-# --- New Tool Schemas to be added ---
 
 TOOL_GET_HISTORICAL_STOCK_DATA = {
     "name": "get_historical_stock_data",
@@ -205,7 +212,7 @@ TOOL_GET_TICKER_SPECIFIC_NEWS = {
 TOOL_LIST_MY_PORTFOLIOS = {
     "name": "list_my_portfolios",
     "description": "Lists all investment portfolios belonging to the current user, showing their names and IDs. The 'user_id' is automatically inferred.",
-    "parameters": {"type": "object", "properties": {}} # No parameters needed from LLM, user_id is injected
+    "parameters": {"type": "object", "properties": {}}
 }
 
 TOOL_GET_PORTFOLIO_POSITIONS = {
@@ -217,7 +224,6 @@ TOOL_GET_PORTFOLIO_POSITIONS = {
             "portfolio_name": {"type": "string", "description": "The name of the portfolio. Use if portfolio_id is not known.", "optional": True},
             "portfolio_id": {"type": "integer", "description": "The unique ID of the portfolio. Preferred if known.", "optional": True}
         },
-        # LLM should provide at least one, function logic will handle preference. Tool description guides this.
     }
 }
 
@@ -281,13 +287,13 @@ AVAILABLE_TOOLS_SCHEMAS = [
 ]
 
 def get_tool_schemas_for_llm():
+    """Returns a JSON string representation of all available tool schemas.
+
+    This helper function is used to easily serialize the tool definitions for
+    inclusion in a prompt to the language model.
+
+    Returns:
+        str: A pretty-printed JSON string of the tool schemas.
+    """
     import json
-    # Exclude 'optional' field if not OpenAI standard, or ensure it's handled correctly by your LLM
-    # For this exercise, keeping it as it might be useful for some models/parsers.
-    # If using OpenAI, 'optional' is not a standard field in the function definition schema;
-    # optionality is conveyed by not including the parameter in the 'required' list.
-    
-    # Simplified schemas for LLM if 'optional' field is an issue:
-    # Remove 'optional: True' and rely on absence from 'required' list.
-    # This step is skipped here to keep the provided structure, assuming the LLM or parser handles 'optional'.
     return json.dumps(AVAILABLE_TOOLS_SCHEMAS, indent=2)

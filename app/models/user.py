@@ -25,6 +25,29 @@ class InvestmentGoals(str, enum.Enum):
 
 
 class User(Base):
+    """Represents a user of the application.
+
+    This model stores core user information, profile details, and preferences
+    that can be used to personalize the application experience.
+
+    Attributes:
+        id (int): Primary key for the user.
+        username (str): The user's unique username.
+        email (str): The user's unique email address.
+        full_name (str): The user's full name.
+        profile_picture_url (str): URL to the user's profile picture.
+        is_active (bool): Flag indicating if the user's account is active.
+        trading_experience (TradingExperienceLevel): The user's self-assessed trading experience.
+        risk_appetite (RiskAppetite): The user's tolerance for investment risk.
+        investment_goals (InvestmentGoals): The user's primary financial goals.
+        preferred_asset_classes (JSON): A list of asset classes the user is interested in.
+        interests_for_feed (JSON): A list of topics or symbols for personalizing the feed.
+        date_of_birth (datetime): The user's date of birth.
+        country_of_residence (str): The user's country.
+        timezone (str): The user's preferred timezone.
+        portfolios (relationship): Relationship to the user's investment portfolios.
+        feed_items (relationship): Relationship to the user's aggregated feed items.
+    """
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -33,9 +56,9 @@ class User(Base):
     full_name = Column(String(100), nullable=True)
     profile_picture_url = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
-    trading_experience = Column(SAEnum(TradingExperienceLevel), nullable=True) # Changed SAEnum to Enum
-    risk_appetite = Column(SAEnum(RiskAppetite), nullable=True) # Changed SAEnum to Enum
-    investment_goals = Column(SAEnum(InvestmentGoals), nullable=True) # Changed SAEnum to Enum
+    trading_experience = Column(SAEnum(TradingExperienceLevel), nullable=True)
+    risk_appetite = Column(SAEnum(RiskAppetite), nullable=True)
+    investment_goals = Column(SAEnum(InvestmentGoals), nullable=True)
     preferred_asset_classes = Column(JSON, nullable=True)
     interests_for_feed = Column(JSON, nullable=True)
     date_of_birth = Column(DateTime(timezone=False), nullable=True)
@@ -44,9 +67,6 @@ class User(Base):
 
     portfolios = relationship("Portfolio", back_populates="user")
 
-    # Relationship to FeedItems
-    # This defines the one-to-many side: one User can have many FeedItems.
-    # 'back_populates' links this relationship to the 'user' attribute on the FeedItem model.
     feed_items = relationship("FeedItem", back_populates="user", cascade="all, delete-orphan")
 
 

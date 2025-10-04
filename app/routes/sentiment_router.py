@@ -1,5 +1,3 @@
-# app/routes/sentiment_router.py
-
 from fastapi import APIRouter, Path, HTTPException
 from app.services.sentiment_service import compute_sentiment_score, classify_score
 
@@ -12,12 +10,20 @@ router = APIRouter(
 async def sentiment_index(
     symbol: str = Path(..., description="Ticker, e.g. AAPL")
 ):
-    """
+    """Calculates a sentiment score based on recent news and social media.
+    
+    The score is computed over the last 24 hours of available data and
+    classified into a suggested action and corresponding market mood.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
     Returns:
-      - `score` ∈ [-1..1]
-      - `action` ∈ {'buy','hold','sell'}
-      - `mood`   ∈ {'greed','neutral','fear'}
-      - always computed over the last 24 hours
+        dict: An object containing the symbol, a compound score from -1 to 1,
+              an 'action' (buy/hold/sell), and a 'mood' (greed/neutral/fear).
+              
+    Raises:
+        HTTPException: 500 if an error occurs during sentiment calculation.
     """
     try:
         score = await compute_sentiment_score(symbol.upper())

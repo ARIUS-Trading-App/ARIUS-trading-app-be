@@ -13,6 +13,7 @@ from app.utils.text_processing import chunk_text
 
 
 async def main():
+    """Main function to run the document ingestion process."""
     if not vector_db_service or not vector_db_service.index:
         print("VectorDBService not available or index not initialized. Exiting.")
         return
@@ -51,7 +52,5 @@ async def main():
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-   
 
     asyncio.run(main())
