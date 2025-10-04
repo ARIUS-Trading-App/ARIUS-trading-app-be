@@ -32,7 +32,6 @@ def send_email_link(recipient: str, token: str):
     base_url = FRONTEND_BASE_URL.rstrip('/')
     login_url = f"{base_url}/profile/login/magic-link?token={token}"
 
-    # Styled HTML email (dark, neon accents, safe for most clients with inline CSS)
     html = f"""
 <!DOCTYPE html>
 <html lang=\"en\">
