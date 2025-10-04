@@ -18,14 +18,22 @@ router = APIRouter(
     "/",
     response_model=User,
     status_code=status.HTTP_201_CREATED,
-    # dependencies=[Depends(get_current_user)],
 )
 def create_user(
     user_in: UserCreate,
     db: Session = Depends(get_db),
 ):
-    """
-    Create a new user.
+    """Creates a new user account.
+    
+    Args:
+        user_in (UserCreate): The user details for the new account.
+        db (Session): The database session dependency.
+        
+    Returns:
+        User: The newly created user object.
+        
+    Raises:
+        HTTPException: 400 if the email or username is already registered.
     """
     if crud_user.get_user_by_email(db, user_in.email):
         raise HTTPException(400, "Email already registered")
@@ -43,17 +51,32 @@ def read_users(
     limit: int = Query(100, gt=0, le=100),
     db: Session = Depends(get_db),
 ):
-    """
-    Retrieve a list of users.
+    """Retrieves a list of users (requires authentication).
+    
+    Args:
+        skip (int): The number of users to skip for pagination.
+        limit (int): The maximum number of users to return.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        List[User]: A list of user objects.
     """
     return crud_user.get_users(db, skip, limit)
 
-#! Probleme
 @router.get(
     "/me",
     response_model=User,
 )
 def read_current_user(current_user: User = Depends(get_current_user)):
+    """Gets the profile of the currently authenticated user.
+    
+    Args:
+        current_user (User): The authenticated user dependency.
+        
+    Returns:
+        User: The profile object of the current user.
+    """
     return current_user
 
 @router.get(
@@ -64,7 +87,21 @@ def read_current_user(current_user: User = Depends(get_current_user)):
 def read_user(
     user_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
 ):
+    """Retrieves the profile for a specific user by their ID.
+    
+    Args:
+        user_id (int): The ID of the user to retrieve.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        User: The requested user's profile object.
+        
+    Raises:
+        HTTPException: 404 if the user is not found.
+    """
     db_user = crud_user.get_user(db, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -81,8 +118,21 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
-    """
-    Update a user.
+    """Updates a user's profile information.
+    
+    A user can only update their own profile.
+    
+    Args:
+        user_id (int): The ID of the user to update.
+        user_in (UserUpdate): The new data for the user's profile.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        User: The updated user object.
+        
+    Raises:
+        HTTPException: 404 if the user is not found, or 403 for insufficient permissions.
     """
     db_user = crud_user.get_user(db, user_id)
     if not db_user:
@@ -101,6 +151,18 @@ def delete_user(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ):
+    """Deletes a user's account.
+    
+    A user can only delete their own account.
+    
+    Args:
+        user_id (int): The ID of the user to delete.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Raises:
+        HTTPException: 404 if the user is not found, or 403 for insufficient permissions.
+    """
     db_user = crud_user.get_user(db, user_id)
     if not db_user:
         raise HTTPException(404, "User not found")

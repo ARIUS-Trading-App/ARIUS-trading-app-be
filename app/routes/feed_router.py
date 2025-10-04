@@ -24,6 +24,7 @@ def add_feed_item(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    """Manually create and store a new item in the user's feed."""
     return create_feed_item(db, current_user.id, dto)
 
 @router.get(
@@ -36,6 +37,7 @@ def get_feed(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    """Retrieves a list of feed items for the current user, with optional filtering."""
     return list_feed_items(db, current_user.id, filters)
 
 @router.post(
@@ -47,8 +49,8 @@ async def refresh_feed(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    """Triggers a background refresh of the user's feed based on a keyword."""
     fetcher = FeedFetcher(db, current_user.id)
-    # kick off both tasks concurrently
     await asyncio.gather(
         fetcher.fetch_news(keyword),
         fetcher.fetch_tweets(keyword)

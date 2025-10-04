@@ -8,14 +8,29 @@ import threading
 
 class LLMProviderService:
     def __init__(self):
+        """Initializes the LLMProviderService.
+        
+        Sets up the Ollama client and configures the primary and secondary
+        LLM models from application settings.
+        """
         self.client = Client(host=settings.OLLAMA_HOST)
-        self.model_name = settings.LLM_MODEL # Presumed to be the more capable model
-        self.smaller_model_name = settings.SMALLER_LLM_MODEL # Presumed to be faster/cheaper
+        self.model_name = settings.LLM_MODEL
+        self.smaller_model_name = settings.SMALLER_LLM_MODEL
         print(f"LLMProviderService initialized with primary model: {self.model_name}, smaller model: {self.smaller_model_name} on host: {settings.OLLAMA_HOST}")
 
     async def chat(self, messages: List[Dict[str, str]], format_type: Optional[str] = None, use_smaller_model: bool = False) -> Union[OllamaChatResponseType, Dict]:
+        """Makes a direct, low-level call to the Ollama chat client.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of message dictionaries.
+            format_type (Optional[str]): The desired response format (e.g., "json").
+            use_smaller_model (bool): If True, uses the smaller, faster model.
+
+        Returns:
+            Union[OllamaChatResponseType, Dict]: The response object from the
+                Ollama client or an error dictionary.
+        """
         try:
-            # Corrected logic for model selection
             model_to_use = self.smaller_model_name if use_smaller_model else self.model_name
             
             chat_kwargs = {
@@ -34,19 +49,30 @@ class LLMProviderService:
 
     async def generate_response(
         self,
-        prompt: str, # Can be None if history contains the full context
+        prompt: str,
         history: List[Dict[str, str]] = None,
         is_json: bool = False,
-        use_smaller_model: bool = False # Explicitly control model choice
+        use_smaller_model: bool = False
     ) -> str:
+        """Generates a complete, non-streamed response from the LLM.
+
+        Args:
+            prompt (str): The user's prompt or question. Can be None if history
+                          provides the full context.
+            history (List[Dict[str, str]]): The conversation history.
+            is_json (bool): If True, requests a JSON formatted response.
+            use_smaller_model (bool): If True, uses the smaller, faster model.
+
+        Returns:
+            str: The content of the LLM's response.
+        """
         messages_for_llm = []
         if history:
             messages_for_llm.extend(history)
-        if prompt: # prompt is now optional
+        if prompt:
             messages_for_llm.append({"role": "user", "content": prompt})
 
         format_to_use = "json" if is_json else None
-        # `use_smaller_model` now directly controls the model choice for this non-streaming call
         response_obj = await self.chat(messages_for_llm, format_type=format_to_use, use_smaller_model=use_smaller_model)
 
         if isinstance(response_obj, OllamaChatResponseType):
@@ -73,11 +99,21 @@ class LLMProviderService:
     async def generate_streamed_response(
         self,
         messages: List[Dict[str, str]],
-        is_json: bool = False, # For setting the format parameter
-        use_smaller_model: bool = False # Explicitly control model choice, default to larger for synthesis quality
+        is_json: bool = False,
+        use_smaller_model: bool = False
     ) -> AsyncGenerator[str, None]:
-        """
-        Generates a streamed response from Ollama, yielding content chunks as they arrive.
+        """Generates a streamed response, yielding content chunks as they arrive.
+        
+        This uses a separate thread for the blocking Ollama client call and an
+        asyncio.Queue to safely pass data back to the async event loop.
+
+        Args:
+            messages (List[Dict[str, str]]): The list of messages for the chat.
+            is_json (bool): If True, requests a JSON formatted response.
+            use_smaller_model (bool): If True, uses the smaller, faster model.
+
+        Yields:
+            str: Chunks of the LLM response content.
         """
         model_for_request = self.smaller_model_name if use_smaller_model else self.model_name
         
@@ -86,7 +122,7 @@ class LLMProviderService:
             "messages": messages,
             "stream": True
         }
-        if is_json: # Though streaming JSON chunk by chunk needs careful client-side handling
+        if is_json:
             chat_kwargs["format"] = "json"
 
         print(f"--- LLM stream with model: {model_for_request} (format: {chat_kwargs.get('format', 'text')}) ---")
@@ -106,7 +142,6 @@ class LLMProviderService:
         thread = threading.Thread(target=_producer, daemon=True)
         thread.start()
 
-        full_response_for_debug = "" # For debugging if needed
         while True:
             item = await queue.get()
             if item is None:
@@ -114,15 +149,13 @@ class LLMProviderService:
             if isinstance(item, Exception):
                 print(f"Error during LLM stream from producer thread: {item}")
                 yield f"STREAM_ERROR: An error occurred with the LLM stream: {item}"
-                return # Stop generation on critical error
+                return
 
             msg = item.get("message", {})
             content = msg.get("content")
             if isinstance(content, str):
-                # full_response_for_debug += content # Uncomment for debugging full stream
                 yield content
-        # print(f"DEBUG Full Streamed Response ({model_for_request}): {full_response_for_debug}") # Uncomment for debugging
 
-        thread.join(timeout=1.0) # Ensure thread finishes, with a timeout
+        thread.join(timeout=1.0)
 
 llm_service = LLMProviderService()

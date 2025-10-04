@@ -31,8 +31,15 @@ def create_portfolio(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Create a new portfolio for the current user.
+    """Creates a new, empty portfolio for the currently authenticated user.
+    
+    Args:
+        data (PortfolioCreate): The name for the new portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        Portfolio: The newly created portfolio object.
     """
     return crud.create_portfolio(db, current_user.id, data)
 
@@ -41,8 +48,14 @@ def list_portfolios(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    List all portfolios for the current user.
+    """Lists all portfolios belonging to the currently authenticated user.
+    
+    Args:
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        List[Portfolio]: A list of the user's portfolios.
     """
     return crud.get_portfolios(db, current_user.id)
 
@@ -53,8 +66,19 @@ def add_position(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """
-    Add a position to a portfolio.
+    """Adds a new stock position to one of the user's portfolios.
+    
+    Args:
+        data (PositionCreate): The details of the position to add.
+        pf_id (int): The ID of the portfolio to add the position to.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        Position: The newly created position object.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -67,8 +91,18 @@ def list_positions(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    List all positions in a portfolio.
+    """Lists all positions within a specific portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        List[Position]: A list of positions in the portfolio.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -82,8 +116,18 @@ async def get_portfolio_value(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Compute the value of a portfolio.
+    """Computes and returns the current market value of a portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        dict: An object containing the portfolio ID and its calculated value.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -97,8 +141,18 @@ async def portfolio_insights(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Generate insights for a portfolio using LLM.
+    """Generates brief, AI-powered insights about a portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        dict: An object containing the portfolio ID and the generated insight.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -130,8 +184,19 @@ def add_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Record a new transaction (buy/sell) for a portfolio.
+    """Records a new transaction (buy or sell) for a specified portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio for the transaction.
+        tx_in (TransactionCreate): The details of the transaction.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        Transaction: The newly created transaction object.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud_pf.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -153,8 +218,22 @@ def list_transactions(
     db:    Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    List transactions for a portfolio with optional pagination and date filtering.
+    """Lists transactions for a portfolio, with optional date filtering and pagination.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        skip (int): The number of transactions to skip for pagination.
+        limit (int): The maximum number of transactions to return.
+        start (Optional[date]): The start date for filtering transactions.
+        end (Optional[date]): The end date for filtering transactions.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        List[Transaction]: A list of transaction objects.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud_pf.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -171,22 +250,42 @@ async def get_portfolio_pnl(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    """
-    Compute the PnL of a portfolio.
+    """Computes the realized and unrealized Profit and Loss (PnL) for a portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        dict: An object with realized_pnl, unrealized_pnl, and other metrics.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
         raise HTTPException(404, "Portfolio not found")
     return await compute_pnl(db, pf_id)
 
-@router.get("/{pf_id}/change-24h") # NEW ENDPOINT
+@router.get("/{pf_id}/change-24h")
 async def get_portfolio_24h_change(
     pf_id: int = Path(..., gt=0, description="The ID of the portfolio to calculate 24h change for"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Compute the overall 24-hour percentage change of the portfolio.
+    """Computes the portfolio's overall percentage change in the last 24 hours.
+    
+    Args:
+        pf_id (int): The ID of the portfolio.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        dict: An object with the portfolio ID and its 24h percentage change.
+        
+    Raises:
+        HTTPException: 404 if the portfolio is not found for the current user.
     """
     p = crud.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -211,8 +310,20 @@ def update_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Update an existing transaction record.
+    """Updates the details of an existing transaction record.
+    
+    Args:
+        pf_id (int): The ID of the portfolio containing the transaction.
+        tx_id (int): The ID of the transaction to update.
+        tx_in (TransactionUpdate): The new data for the transaction.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        Transaction: The updated transaction object.
+        
+    Raises:
+        HTTPException: 404 if the portfolio or transaction is not found.
     """
     p = crud_pf.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -233,8 +344,16 @@ def delete_transaction(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """
-    Delete a transaction record.
+    """Deletes a specific transaction record from a portfolio.
+    
+    Args:
+        pf_id (int): The ID of the portfolio containing the transaction.
+        tx_id (int): The ID of the transaction to delete.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Raises:
+        HTTPException: 404 if the portfolio or transaction is not found.
     """
     p = crud_pf.get_portfolio(db, pf_id)
     if not p or p.user_id != current_user.id:
@@ -242,8 +361,6 @@ def delete_transaction(
     success = crud_tx.delete_transaction(db, tx_id)
     if not success:
         raise HTTPException(404, "Transaction not found")
-    # Deleting the record simply removes it; your P&L & holdings
-    # will be recalculated on next request from remaining transactions.
     return
 
 @router.get("/positions/search-by-symbol", response_model=List[Position])
@@ -252,15 +369,17 @@ def get_all_user_positions_by_symbol(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Retrieves all of a user's positions for a specific symbol across all their portfolios.
+    
+    Args:
+        symbol (str): The stock symbol to search for.
+        db (Session): The database session dependency.
+        current_user: The authenticated user dependency.
+        
+    Returns:
+        List[Position]: A list of all positions matching the symbol for the user.
     """
-    Retrieve all positions for a specific symbol across all of the current user's portfolios.
-    """
-    # The function get_all_positions_for_symbol_by_user is assumed to be in your crud.portfolio module
-    # (aliased as 'crud' or 'crud_pf' in your imports)
     positions = crud.get_all_positions_for_symbol_by_user(db=db, user_id=current_user.id, symbol=symbol)
     if not positions:
-        # It's common to return an empty list if no positions are found,
-        # but you could raise 404 if you prefer that behavior for no matches.
-        # For now, returning an empty list is standard.
-        pass # Return empty list if no positions are found
+        pass
     return positions

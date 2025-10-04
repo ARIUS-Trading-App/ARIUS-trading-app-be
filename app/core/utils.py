@@ -12,8 +12,13 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 
 def create_magic_token(email: str) -> str:
-    """
-    Create a JWT token for the magic link.
+    """Creates a JWT token for a passwordless "magic link" login.
+
+    Args:
+        email (str): The user's email address to be encoded in the token.
+
+    Returns:
+        str: The generated JSON Web Token.
     """
     payload = {
         "sub": email,
@@ -22,8 +27,11 @@ def create_magic_token(email: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def send_email_link(recipient: str, token: str):
-    """
-    Send a magic link to the user's email for login.
+    """Sends a magic login link to a user's email via SendGrid.
+
+    Args:
+        recipient (str): The email address of the recipient.
+        token (str): The magic link token to include in the login URL.
     """
     login_url = f"http://localhost:3000/profile/login/magic-link?token={token}"
     message = Mail(

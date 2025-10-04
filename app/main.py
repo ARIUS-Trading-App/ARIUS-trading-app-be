@@ -30,24 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include authentication router
 app.include_router(auth_router.router)
-# Include user router
 app.include_router(user_router.router)
-# Include chat router
 app.include_router(chat_router.router)
-# Include portfolio router
 app.include_router(portfolio_router.router)
-# Include feed router
 app.include_router(feed_router.router)
-# Include prediction router
 app.include_router(prediction_router.router)
-# Include financial data router
 app.include_router(financial_router.router)
-# Include sentiment index router
 app.include_router(sentiment_router.router)
 
 
 @app.get("/")
 async def root():
+    """Provides a simple welcome message for the root endpoint."""
     return {"message": "Welcome to the Trading LLM App!"}

@@ -1,4 +1,3 @@
-# app/llm_tools/tool_functions.py
 import json
 from typing import Optional, Dict, Any, List
 
@@ -8,12 +7,19 @@ from app.services.vector_db_service import vector_db_service
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.crud import portfolio as crud_portfolio, user as crud_user
-from app.services import portfolio_service as portfolio_service_module # renamed to avoid conflict
+from app.services import portfolio_service as portfolio_service_module
 from app.services import portfolio_pnl_service
 
-# --- Existing Tool Functions (Ensure they use the updated financial_data_service correctly) ---
 async def get_stock_price(symbol: str):
-    """Fetches the current trading price for a specific stock symbol."""
+    """Fetches the current trading price for a stock, with web search fallback.
+
+    Args:
+        symbol (str): The stock ticker symbol (e.g., "AAPL").
+
+    Returns:
+        str: A formatted string with the stock price or an error message
+             detailing the failure and any web search results.
+    """
     data = await financial_data_service.get_stock_quote(symbol)
     if data and "Error Message" not in data and data.get('05. price') and data.get('05. price') != 'N/A':
         return f"The current price of {symbol.upper()} is ${data.get('05. price')}. Latest trading day: {data.get('07. latest trading day', 'N/A')}."
@@ -30,13 +36,20 @@ async def get_stock_price(symbol: str):
     return f"{error_message} Web search fallback also did not find price information for {symbol.upper()}."
 
 async def get_crypto_price(symbol: str, market: str = None):
-    """Fetches the current price for a specific cryptocurrency symbol."""
-    effective_market = market or settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT # Can still use this as default target currency
-    # financial_data_service.get_crypto_exchange_rate now returns a dict potentially with "Error Message" or "Realtime Currency Exchange Rate"
+    """Fetches the current price for a cryptocurrency, with web search fallback.
+
+    Args:
+        symbol (str): The cryptocurrency symbol (e.g., "BTC").
+        market (str, optional): The quote currency (e.g., "USD"). Defaults to system default.
+
+    Returns:
+        str: A formatted string with the crypto price or an error message
+             detailing the failure and any web search results.
+    """
+    effective_market = market or settings.ALPHA_VANTAGE_CRYPTO_MARKET_DEFAULT
     price_data_response = await financial_data_service.get_crypto_exchange_rate(from_currency_symbol=symbol, to_currency_symbol=effective_market)
     
     if price_data_response and "Error Message" not in price_data_response:
-        # Check structure from yfinance adapter
         if "Realtime Currency Exchange Rate" in price_data_response:
             data = price_data_response["Realtime Currency Exchange Rate"]
             rate = data.get("5. Exchange Rate")
@@ -45,7 +58,7 @@ async def get_crypto_price(symbol: str, market: str = None):
             to_code = data.get("3. To_Currency Code")
             if rate and rate != 'N/A':
                  return f"The current exchange rate for {from_code}/{to_code} is {rate}. Last refreshed: {last_refreshed}."
-        elif "exchange_rate" in price_data_response : # Fallback structure
+        elif "exchange_rate" in price_data_response:
             rate = price_data_response.get("exchange_rate")
             last_refreshed = price_data_response.get("last_refreshed")
             from_code = price_data_response.get("from_currency")
@@ -67,12 +80,20 @@ async def get_crypto_price(symbol: str, market: str = None):
     return f"{error_message} Web search fallback also did not find price information for {symbol.upper()}/{effective_market.upper()}."
 
 async def get_company_overview(symbol: str):
-    """Retrieves detailed information about a publicly traded company."""
+    """Retrieves a summary of a publicly traded company's profile.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
+    Returns:
+        str: A formatted string containing the company's name, description,
+             industry, sector, and market cap, or an error message.
+    """
     data = await financial_data_service.get_company_overview(symbol)
-    if data and "Error Message" not in data and data.get('Description'): # yf wrapper returns dict or dict with "Error Message"
+    if data and "Error Message" not in data and data.get('Description'):
         overview = (
             f"Name: {data.get('Name', 'N/A')}\n"
-            f"Symbol: {data.get('Symbol', symbol.upper())}\n" # Use input symbol as fallback
+            f"Symbol: {data.get('Symbol', symbol.upper())}\n"
             f"Description: {data.get('Description', 'N/A')[:500]}...\n" 
             f"Industry: {data.get('Industry', 'N/A')}\n"
             f"Sector: {data.get('Sector', 'N/A')}\n"
@@ -84,7 +105,16 @@ async def get_company_overview(symbol: str):
     return f"Could not retrieve company overview for {symbol.upper()}, or the symbol was not found/valid."
 
 async def get_financial_news(query: str, limit: int = 3):
-    """Searches for recent financial news and articles using general web search, filtered for financial domains."""
+    """Searches for recent news articles from financial domains.
+
+    Args:
+        query (str): The search query for the news.
+        limit (int): The maximum number of articles to return (capped at 5).
+
+    Returns:
+        str: A formatted string containing the search results, or a
+             message indicating that no news was found.
+    """
     validated_limit = max(1, min(limit, 5)) 
     news_context = await web_search_service.get_search_context(
         query, 
@@ -100,7 +130,15 @@ async def get_financial_news(query: str, limit: int = 3):
     return f"No specific news found via web search for the query: '{query}' from preferred financial news domains."
 
 async def explain_financial_concept(concept_name: str):
-    """Explains a financial concept, term, or metric using knowledge base and web search."""
+    """Explains a financial concept using the internal knowledge base or web search.
+
+    Args:
+        concept_name (str): The financial term or concept to explain.
+
+    Returns:
+        str: An explanation from the knowledge base if available, otherwise
+             from a web search, or an error message if not found.
+    """
     pinecone_context = ""
     if vector_db_service and hasattr(vector_db_service, 'get_pinecone_context'): 
         try:
@@ -122,63 +160,124 @@ async def explain_financial_concept(concept_name: str):
     return f"Could not find a clear explanation for '{concept_name}' from available sources (Knowledge Base or Web Search)."
 
 async def general_web_search(query: str):
-    """Performs a general web search. Useful for finding lists of items or information not covered by other tools."""
+    """Performs a general web search for queries not covered by other tools.
+
+    Args:
+        query (str): The search query.
+
+    Returns:
+        str: A formatted string of the search results or a not-found message.
+    """
     search_results = await web_search_service.get_search_context(query, max_results=3) 
     if search_results and "No relevant information" not in search_results:
         return f"Web search results for '{query}':\n{search_results}"
     return f"No specific information found via web search for '{query}'."
 
-# --- New Tool Functions to be added ---
 
 async def get_historical_stock_data(symbol: str, outputsize: str = "compact"):
-    """Fetches daily historical stock data (date, open, high, low, close, adjusted close, volume, dividend, split coefficient) for a stock symbol."""
+    """Fetches daily historical stock data for a given symbol.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+        outputsize (str, optional): 'compact' for the last 100 data points,
+                                     'full' for the entire history. Defaults to "compact".
+
+    Returns:
+        dict or str: The historical data as a dictionary on success, or an
+                     error message string on failure.
+    """
     data = await financial_data_service.get_daily_adjusted_stock_data(symbol, outputsize)
     if data and "Error Message" not in data:
-        # Data is already a dict, ready to be returned or summarized.
-        # For LLM, returning the full structure might be too verbose for direct chat.
-        # Consider returning a summary or a limited number of recent entries.
-        # For now, let's return it as is, assuming RAG synthesis will handle it.
         return data 
     return data.get("Error Message", f"Could not retrieve historical stock data for {symbol}.")
 
 async def get_intraday_stock_data_tool(symbol: str, interval: str = '5min', outputsize: str = 'compact'):
-    """Fetches intraday stock data (date, open, high, low, close, volume) for a stock symbol at specified intervals."""
-    # Renamed to avoid conflict with financial_data_service.get_intraday_stock_data
+    """Fetches intraday historical stock data for a given symbol.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+        interval (str, optional): The time interval between data points. Defaults to '5min'.
+        outputsize (str, optional): 'compact' for recent data, 'full' for more. Defaults to "compact".
+
+    Returns:
+        dict or str: The intraday data as a dictionary on success, or an
+                     error message string on failure.
+    """
     data = await financial_data_service.get_intraday_stock_data(symbol, interval, outputsize)
     if data and "Error Message" not in data:
         return data
     return data.get("Error Message", f"Could not retrieve intraday stock data for {symbol} with interval {interval}.")
 
 async def get_income_statement_tool(symbol: str):
-    """Fetches annual and quarterly income statements for a given stock symbol."""
+    """Fetches the annual and quarterly income statements for a company.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
+    Returns:
+        dict or str: The income statement data as a dictionary on success,
+                     or an error message string on failure.
+    """
     data = await financial_data_service.get_income_statement(symbol)
     if data and "Error Message" not in data:
         return data
     return data.get("Error Message", f"Could not retrieve income statement for {symbol}.")
 
 async def get_balance_sheet_tool(symbol: str):
-    """Fetches annual and quarterly balance sheets for a given stock symbol."""
+    """Fetches the annual and quarterly balance sheets for a company.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
+    Returns:
+        dict or str: The balance sheet data as a dictionary on success,
+                     or an error message string on failure.
+    """
     data = await financial_data_service.get_balance_sheet(symbol)
     if data and "Error Message" not in data:
         return data
     return data.get("Error Message", f"Could not retrieve balance sheet for {symbol}.")
 
 async def get_cash_flow_statement_tool(symbol: str):
-    """Fetches annual and quarterly cash flow statements for a given stock symbol."""
+    """Fetches the annual and quarterly cash flow statements for a company.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
+    Returns:
+        dict or str: The cash flow data as a dictionary on success,
+                     or an error message string on failure.
+    """
     data = await financial_data_service.get_cash_flow(symbol)
     if data and "Error Message" not in data:
         return data
     return data.get("Error Message", f"Could not retrieve cash flow statement for {symbol}.")
 
 async def get_company_earnings_tool(symbol: str):
-    """Fetches historical annual and quarterly earnings (EPS and Revenue) for a given stock symbol."""
+    """Fetches historical annual and quarterly earnings for a company.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+
+    Returns:
+        dict or str: The earnings data as a dictionary on success,
+                     or an error message string on failure.
+    """
     data = await financial_data_service.get_earnings(symbol)
     if data and "Error Message" not in data:
         return data
     return data.get("Error Message", f"Could not retrieve earnings data for {symbol}.")
 
 async def get_asset_price_change_24h(symbol: str):
-    """Fetches the price change for an asset (stock, crypto, FX) over the last 24 hours."""
+    """Fetches the approximate 24-hour price change for any financial asset.
+
+    Args:
+        symbol (str): The asset symbol (e.g., "AAPL", "BTC-USD").
+
+    Returns:
+        str: A formatted string summarizing the 24-hour price change, or
+             an error message on failure.
+    """
     data = await financial_data_service.get_price_change_24h(symbol)
     if data and "Error Message" not in data:
         return (f"24h Price Change for {data.get('symbol', symbol.upper())}: "
@@ -192,24 +291,26 @@ async def get_asset_price_change_24h(symbol: str):
 
 
 async def get_ticker_specific_news(symbol: str, limit: int = 5):
-    """Fetches recent news articles specifically related to a ticker symbol from financial data provider (yfinance)."""
-    # Assuming you've renamed the service method for clarity:
-    # data = await financial_data_service.get_yfinance_ticker_news(tickers=symbol, limit=limit)
-    # If still using the old name:
+    """Fetches recent news articles specifically for a given stock ticker.
+
+    Args:
+        symbol (str): The stock ticker symbol.
+        limit (int, optional): The maximum number of news articles to return. Defaults to 5.
+
+    Returns:
+        str: A formatted string of news articles, or a message indicating no news was found.
+    """
     data = await financial_data_service.get_alpha_vantage_news_sentiment(tickers=symbol, limit=limit)
     
     if data and "Error Message" not in data and "feed" in data:
         news_feed = data.get("feed", [])
-        
-        # print(f"DEBUG: Processed news_feed for {symbol} in tool function: {news_feed}") # For debugging
-
         if not news_feed:
             return f"No specific news found for {symbol.upper()} directly from the financial data provider."
 
         valid_news_items = []
         for item in news_feed:
-            title = item.get('title') # This will now get the correctly extracted title
-            url = item.get('url')     # This will now get the correctly extracted URL
+            title = item.get('title')
+            url = item.get('url')
             
             if title and url: 
                 formatted_item = (
@@ -232,33 +333,52 @@ async def get_ticker_specific_news(symbol: str, limit: int = 5):
     
     return f"Could not retrieve or parse specific news feed for {symbol.upper()}."
 
-# --- Portfolio Related Tools (require user_id and portfolio context) ---
 
 def _get_portfolio_id_from_params(db, user_id: int, portfolio_name: Optional[str] = None, portfolio_id: Optional[int] = None) -> Optional[int]:
-    """Helper to resolve portfolio_id, checking ownership."""
+    """Resolves a portfolio ID from name or ID, ensuring user ownership.
+
+    This helper function checks if a user owns the specified portfolio. It can
+    also infer the portfolio ID if the user has only one.
+
+    Args:
+        db: The SQLAlchemy database session.
+        user_id (int): The ID of the user.
+        portfolio_name (Optional[str], optional): The name of the portfolio.
+        portfolio_id (Optional[int], optional): The ID of the portfolio.
+
+    Returns:
+        Optional[int]: The resolved and validated portfolio ID, or None.
+    """
     if portfolio_id:
         portfolio = crud_portfolio.get_portfolio(db, portfolio_id=portfolio_id)
         if portfolio and portfolio.user_id == user_id:
             return portfolio_id
-        return None # Not found or not owned
+        return None
     
     user_portfolios = crud_portfolio.get_portfolios(db, user_id=user_id)
     if not user_portfolios:
-        return None # No portfolios for user
+        return None
 
     if portfolio_name:
         for p in user_portfolios:
             if p.name.lower() == portfolio_name.lower():
                 return p.id
-        return None # Named portfolio not found
+        return None
     
     if len(user_portfolios) == 1:
-        return user_portfolios[0].id # Default to the only portfolio
+        return user_portfolios[0].id
     
-    return None # Ambiguous or not found
+    return None
 
 async def list_my_portfolios(user_id: int):
-    """Lists all portfolios for the current user."""
+    """Lists all portfolios belonging to the current user.
+
+    Args:
+        user_id (int): The ID of the authenticated user.
+
+    Returns:
+        list or str: A list of portfolio details on success, or an error message.
+    """
     db = SessionLocal()
     try:
         portfolios = crud_portfolio.get_portfolios(db, user_id=user_id)
@@ -271,7 +391,17 @@ async def list_my_portfolios(user_id: int):
         db.close()
 
 async def get_portfolio_positions_tool(user_id: int, portfolio_name: Optional[str] = None, portfolio_id: Optional[int] = None):
-    """Lists all positions in a specified portfolio for the current user."""
+    """Lists all positions in a specified portfolio for the current user.
+
+    Args:
+        user_id (int): The ID of the authenticated user.
+        portfolio_name (Optional[str], optional): The name of the portfolio.
+        portfolio_id (Optional[int], optional): The ID of the portfolio.
+
+    Returns:
+        list or str: A list of position details on success, or a message
+                     explaining the error or ambiguity.
+    """
     db = SessionLocal()
     try:
         resolved_portfolio_id = _get_portfolio_id_from_params(db, user_id, portfolio_name, portfolio_id)
@@ -292,7 +422,17 @@ async def get_portfolio_positions_tool(user_id: int, portfolio_name: Optional[st
         db.close()
 
 async def get_portfolio_market_value_tool(user_id: int, portfolio_name: Optional[str] = None, portfolio_id: Optional[int] = None):
-    """Calculates the current total market value of a specified portfolio for the current user."""
+    """Calculates the current total market value of a specified portfolio.
+
+    Args:
+        user_id (int): The ID of the authenticated user.
+        portfolio_name (Optional[str], optional): The name of the portfolio.
+        portfolio_id (Optional[int], optional): The ID of the portfolio.
+
+    Returns:
+        dict or str: An object with the portfolio ID and its market value,
+                     or an error message.
+    """
     db = SessionLocal()
     try:
         resolved_portfolio_id = _get_portfolio_id_from_params(db, user_id, portfolio_name, portfolio_id)
@@ -311,7 +451,17 @@ async def get_portfolio_market_value_tool(user_id: int, portfolio_name: Optional
         db.close()
 
 async def get_portfolio_daily_change_percentage_tool(user_id: int, portfolio_name: Optional[str] = None, portfolio_id: Optional[int] = None):
-    """Calculates the overall 24-hour percentage change of a specified portfolio for the current user."""
+    """Calculates the overall 24-hour percentage change of a specified portfolio.
+
+    Args:
+        user_id (int): The ID of the authenticated user.
+        portfolio_name (Optional[str], optional): The name of the portfolio.
+        portfolio_id (Optional[int], optional): The ID of the portfolio.
+
+    Returns:
+        dict or str: An object with the portfolio ID and its daily change,
+                     or an error message.
+    """
     db = SessionLocal()
     try:
         resolved_portfolio_id = _get_portfolio_id_from_params(db, user_id, portfolio_name, portfolio_id)
@@ -330,7 +480,16 @@ async def get_portfolio_daily_change_percentage_tool(user_id: int, portfolio_nam
         db.close()
 
 async def get_portfolio_pnl_tool(user_id: int, portfolio_name: Optional[str] = None, portfolio_id: Optional[int] = None):
-    """Calculates the Profit and Loss (PnL) for a specified portfolio, including realized, unrealized, and current market value."""
+    """Calculates the Profit and Loss (PnL) for a specified portfolio.
+
+    Args:
+        user_id (int): The ID of the authenticated user.
+        portfolio_name (Optional[str], optional): The name of the portfolio.
+        portfolio_id (Optional[int], optional): The ID of the portfolio.
+
+    Returns:
+        dict or str: An object with detailed PnL data, or an error message.
+    """
     db = SessionLocal()
     try:
         resolved_portfolio_id = _get_portfolio_id_from_params(db, user_id, portfolio_name, portfolio_id)
@@ -356,9 +515,8 @@ TOOL_FUNCTIONS = {
     "get_financial_news": get_financial_news,
     "explain_financial_concept": explain_financial_concept,
     "general_web_search": general_web_search,
-    # New tools
     "get_historical_stock_data": get_historical_stock_data,
-    "get_intraday_stock_data": get_intraday_stock_data_tool, # Use the renamed wrapper
+    "get_intraday_stock_data": get_intraday_stock_data_tool,
     "get_income_statement": get_income_statement_tool,
     "get_balance_sheet": get_balance_sheet_tool,
     "get_cash_flow_statement": get_cash_flow_statement_tool,

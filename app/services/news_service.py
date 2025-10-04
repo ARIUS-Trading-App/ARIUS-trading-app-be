@@ -1,5 +1,3 @@
-# app/services/news_service.py
-
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
 from typing import List
@@ -8,17 +6,21 @@ from app.core.config import settings
 _newsapi = NewsApiClient(api_key=settings.NEWS_API_KEY)
 
 async def fetch_stock_news(symbol: str, days: int = 1) -> List[str]:
+    """Fetches recent news headlines and descriptions for a given stock symbol.
+
+    Args:
+        symbol (str): The stock symbol (e.g., "AAPL").
+        days (int): The number of past days to fetch news for.
+
+    Returns:
+        List[str]: A list of strings, where each string combines a news
+                   article's title and description.
     """
-    Fetch headlines & descriptions for the past `days` days, 
-    with from/to timestamps in YYYY-MM-DDTHH:MM:SS format.
-    """
-    # 1) get now & back up `days`, then strip microseconds
     now = datetime.utcnow().replace(microsecond=0)
     frm = now - timedelta(days=days)
 
-    # 2) create ISO strings with seconds only
-    from_param = frm.isoformat(timespec="seconds")  # e.g. "2025-05-28T14:23:01"
-    to_param   = now.isoformat(timespec="seconds")  # e.g. "2025-05-29T14:23:01"
+    from_param = frm.isoformat(timespec="seconds")
+    to_param   = now.isoformat(timespec="seconds")
 
     resp = _newsapi.get_everything(
         q=f"{symbol} stock OR {symbol} market",

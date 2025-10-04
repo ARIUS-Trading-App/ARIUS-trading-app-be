@@ -5,6 +5,11 @@ import numpy as np
 
 class EmbeddingService:
     def __init__(self):
+        """Initializes the EmbeddingService.
+
+        Loads the SentenceTransformer model specified in the settings and sets
+        the embedding dimension. Handles potential errors during model loading.
+        """
         self.model_name = settings.EMBEDDING_MODEL_NAME
         try:
             self.model = SentenceTransformer(self.model_name)
@@ -13,12 +18,28 @@ class EmbeddingService:
         except Exception as e:
             print(f"Error loading SentenceTransformer model '{self.model_name}': {e}")
             self.model = None
-            self.dimension = 0 # or 384
+            self.dimension = 0 
             
     def get_embedding_dimension(self) -> int:
+        """Returns the dimension of the embeddings produced by the model.
+
+        Returns:
+            int: The embedding vector dimension.
+        """
         return self.dimension
     
     def generate_embeddings(self, texts: Union[str, List[str]]) -> Union[np.ndarray, List[np.ndarray], None]:
+        """Generates embeddings for a given text or list of texts.
+
+        Args:
+            texts (Union[str, List[str]]): A single string or a list of strings
+                                           to be encoded.
+
+        Returns:
+            Union[np.ndarray, List[np.ndarray], None]: A numpy array or a list
+                of numpy arrays representing the embeddings, or None if the
+                model failed to load or an error occurred.
+        """
         if not self.model:
             print("Embedding model not loaded.")
             return None
