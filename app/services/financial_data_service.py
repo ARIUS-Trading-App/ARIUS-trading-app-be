@@ -927,6 +927,8 @@ class FinancialDataService:
                 "change_percent": float(change_percent),
                 "latest_price_timestamp_utc": latest_timestamp_utc.strftime('%Y-%m-%d %H:%M:%S %Z'),
                 "reference_price_24h_ago_timestamp_utc": timestamp_of_price_24h_ago_utc.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                "latest_price_timestamp": latest_timestamp_utc.strftime('%Y-%m-%d %H:%M:%S %Z'),
+                "reference_price_24h_ago_timestamp": timestamp_of_price_24h_ago_utc.strftime('%Y-%m-%d %H:%M:%S %Z'),
             }
             if note:
                 response["note"] = note
