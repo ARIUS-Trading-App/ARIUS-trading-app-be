@@ -13,6 +13,7 @@ from app.routes import prediction_router
 from app.routes import chat_router
 from app.routes import financial_router
 from app.routes import sentiment_router
+from app.routes import markets_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -38,6 +39,7 @@ app.include_router(feed_router.router)
 app.include_router(prediction_router.router)
 app.include_router(financial_router.router)
 app.include_router(sentiment_router.router)
+app.include_router(markets_router.router)
 
 
 @app.get("/")

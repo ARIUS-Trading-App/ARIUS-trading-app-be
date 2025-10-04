@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "your-newsapi-key")
 
+    FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
