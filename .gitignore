@@ -178,3 +178,4 @@ cython_debug/
 test.py
 test_chatbot_cli.py
 test_web_search.py
+.python-version
