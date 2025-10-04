@@ -1,10 +1,10 @@
 import time
 import traceback
-from pinecone import Pinecone, Index, IndexList, ServerlessSpec, PodSpec
+from pinecone import Pinecone, ServerlessSpec, PodSpec
 from app.core.config import settings
 from app.services.embedding_service import embedding_service
 from app.utils.text_processing import chunk_text
-from typing import List, Dict, Optional, Tuple, Union
+from typing import Any, List, Dict, Optional, Tuple, Union
 import asyncio
 import logging
 import uuid
@@ -24,7 +24,7 @@ class VectorDBService:
         if not settings.PINECONE_API_KEY:
             logger.error("PINECONE_API_KEY is not set. Pinecone service will not be available.")
             self.pinecone: Optional[Pinecone] = None
-            self.index: Optional[Index] = None
+            self.index: Optional[Any] = None
             self.dimension: int = 0
             return
 
@@ -34,7 +34,7 @@ class VectorDBService:
         logger.info(f"Initializing Pinecone with API Key: {'SET' if settings.PINECONE_API_KEY else 'NOT_SET'}")
         self.pinecone = Pinecone(api_key=settings.PINECONE_API_KEY)
         self.index_name = settings.PINECONE_INDEX_NAME
-        self.index: Optional[Index] = None
+        self.index: Optional[Any] = None
         self.dimension = embedding_service.get_embedding_dimension()
         
         if self.dimension == 0 and embedding_service.model:
