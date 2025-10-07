@@ -1,5 +1,16 @@
 # ARIUS - AI Trading Assistant (Backend)
 
+<div align="center">
+
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Ollama](https://img.shields.io/badge/Ollama-llama3-lightgrey.svg)](https://ollama.com/)
+[![Pinecone](https://img.shields.io/badge/Vector%20DB-Pinecone-blueviolet.svg)](https://www.pinecone.io/)
+[![SQLAlchemy](https://img.shields.io/badge/ORM-SQLAlchemy-red.svg)](https://www.sqlalchemy.org/)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](../LICENSE)
+
+</div>
+
 ## 1\. System Architecture and Core Components
 
 This repository contains the backend for a tool-augmented LLM agent designed for financial analysis and portfolio management. The system is architected as an asynchronous FastAPI application that orchestrates a series of services to provide a stateful, multi-turn conversational experience. The core of the application is a custom-built, self-correcting reasoning agent.
