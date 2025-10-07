@@ -1,6 +1,6 @@
 # ARIUS — AI Trading Assistant (Backend)
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg?style=flat&logo=fastapi) ![Ollama](https://img.shields.io/badge/Ollama-llama3-2196F3.svg?style=flat&logo=ollama) ![Pinecone](https://img.shields.io/badge/Pinecone-Vector_DB-FFC107.svg?style=flat&logo=pinecone) ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-E44C30.svg?style=flat&logo=sqlalchemy) ![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg?style=flat&logo=fastapi) ![DeepSeek](https://img.shields.io/badge/DeepSeek-14B-4D4DFF.svg?style=flat) ![Llama 3](https://img.shields.io/badge/Llama_3-3B-2196F3.svg?style=flat&logo=ollama) ![Pinecone](https://img.shields.io/badge/Pinecone-Vector_DB-FFC107.svg?style=flat&logo=pinecone) ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-E44C30.svg?style=flat&logo=sqlalchemy) ![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat)
 
 -----
 
